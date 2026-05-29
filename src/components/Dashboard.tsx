@@ -1130,6 +1130,7 @@ export default function Dashboard() {
     setRobotStartTime(null); setSimpleFolderStatus('idle');
     setMediaDriveCopyStatus('idle'); setMediaDriveCopyProgress(null); setMediaDriveCopyResult(null); setMediaDriveCopyError(null);
     setBellaDriveCopyStatus('idle'); setBellaDriveCopyProgress(null); setBellaDriveCopyResult(null); setBellaDriveCopyError(null);
+    setSdDeleteStatus('idle'); setSdDeleteResult(null); setSdDeleteError(null);
     setSdCopyResult(null); setCopyProgress(null);
   };
 
@@ -3030,7 +3031,7 @@ export default function Dashboard() {
                 {/* 1. ACTIVE CARD SETUP */}
                 <div className="bg-slate-900 rounded-3xl p-8 space-y-6 shadow-xl">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                    <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest">1. ACTIVE CARD SETUP</h3>
+                    <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest">1. CARD SETUP + WORKFLOW</h3>
                     <span className="text-[10px] bg-cyan-400/10 text-cyan-400 px-3 py-1 rounded font-black uppercase border border-cyan-400/20">
                       {config.eventName || 'EVENT'}
                     </span>
@@ -3101,12 +3102,10 @@ export default function Dashboard() {
                   >
                     ✕ CLEAR FOLDER NAME
                   </button>
-                </div>
 
-                {/* 2. WORKFLOW BUTTONS */}
-                <div className="bg-slate-900 rounded-3xl p-8 space-y-4 shadow-xl">
-                  <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest border-b border-slate-800 pb-4">
-                    2. WORKFLOW
+                  {/* WORKFLOW (same module) */}
+                  <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest border-b border-slate-800 pb-4 pt-4">
+                    WORKFLOW
                   </h3>
                   <div className="space-y-3">
                     <button
@@ -3247,6 +3246,35 @@ export default function Dashboard() {
                       </div>
                     )}
 
+                    {/* CLEAR SD CARD — only after footage is moved to STABILIZED */}
+                    {moveExportsStatus === 'success' && (
+                      <div className="space-y-1.5 pt-1">
+                        <button
+                          disabled={sdDeleteStatus === 'deleting'}
+                          onClick={handleDeleteSdFiles}
+                          className={`w-full py-3 px-6 rounded-2xl font-black text-sm uppercase tracking-widest transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                            sdDeleteStatus === 'success'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              : 'bg-rose-900 text-rose-200 hover:bg-rose-800'
+                          }`}
+                        >
+                          {sdDeleteStatus === 'deleting'
+                            ? '⏳ DELETING SD FILES...'
+                            : sdDeleteStatus === 'success'
+                            ? '✓ SD CARD CLEARED'
+                            : `🗑 DELETE RAW FILES FROM SD (${config.sdCardDrive})`}
+                        </button>
+                        {sdDeleteStatus === 'success' && sdDeleteResult && (
+                          <p className="text-center text-[10px] font-mono text-rose-300">
+                            Deleted {sdDeleteResult.deletedCount} file{sdDeleteResult.deletedCount !== 1 ? 's' : ''} — freed {sdDeleteResult.freedGB} GB
+                          </p>
+                        )}
+                        {sdDeleteStatus === 'error' && sdDeleteError && (
+                          <p className="text-center text-[10px] font-mono text-rose-400 break-all">✗ {sdDeleteError}</p>
+                        )}
+                      </div>
+                    )}
+
                     <button
                       onClick={handleSimpleLogCard}
                       className="w-full py-5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-sm uppercase tracking-widest rounded-2xl transition flex items-center justify-center gap-2 active:scale-95"
@@ -3279,7 +3307,7 @@ export default function Dashboard() {
               <div className="bg-slate-900 rounded-3xl p-8 space-y-5 shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                   <h3 className="text-sm font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-rose-500" /> 3. GOPRO BATCH EXPORTER
+                    <AlertTriangle className="w-5 h-5 text-rose-500" /> 2. GOPRO BATCH EXPORTER
                   </h3>
                 </div>
                 <GoProStatusPanel
@@ -3309,7 +3337,7 @@ export default function Dashboard() {
             <div className="bg-slate-900 rounded-3xl p-6 shadow-xl space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
                 <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
-                  <List className="w-4 h-4 text-cyan-400" /> 4. SESSION LOG
+                  <List className="w-4 h-4 text-cyan-400" /> 3. SESSION LOG
                 </h3>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-xs font-black text-slate-400 bg-slate-800 px-3 py-1.5 rounded-lg font-mono">
