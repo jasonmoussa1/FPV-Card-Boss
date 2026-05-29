@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+// Build timestamp injected by vite.config.ts `define`
+declare const __BUILD_TIME__: string;
+
 interface ElectronBridge {
   ipcRenderer: {
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;

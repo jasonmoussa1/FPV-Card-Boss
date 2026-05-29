@@ -380,6 +380,10 @@ $rawPath = "${rawPath}"
 $stabilizedPath = "${stabilizedPath}"
 $uiaRoot = [System.Windows.Automation.AutomationElement]::RootElement
 
+# Log file — forward slashes avoid JS-template-literal backslash-escaping issues.
+$logFile = "$env:TEMP/gopro_robot_log.txt"
+Add-Content $logFile "===== ROBOT START $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ====="
+
 # 1. GoPro Player is already open — just bring it to foreground
 $goProProc = Get-Process | Where-Object {
     $_.MainWindowTitle -like "*GoPro*"
@@ -427,25 +431,31 @@ function Click-GoPro {
     Start-Sleep -Milliseconds $delayMs
 }
 
-# 3. Open File Explorer to the correct RAW folder
+# 3. Open File Explorer to the correct RAW folder.
+# Use the Shell.Application COM object's Explore() — it takes a plain path
+# string, so there are NO command-line quoting issues (the cause of explorer
+# falling back to Documents). It also handles spaces in paths natively.
 $rawFolderPath = $rawPath
 Write-Host "DEBUG: rawFolderPath = [$rawFolderPath]"
-Add-Content "$env:TEMP\gopro_robot_log.txt" "DEBUG: rawFolderPath = [$rawFolderPath]"
+Add-Content $logFile "DEBUG: rawFolderPath = [$rawFolderPath]"
 if ([string]::IsNullOrWhiteSpace($rawFolderPath)) {
     Write-Error "FATAL: rawFolderPath is EMPTY"
+    Add-Content $logFile "FATAL: rawFolderPath is EMPTY"
     exit 1
 }
 if (-not (Test-Path -LiteralPath $rawFolderPath)) {
     Write-Error "FATAL: rawFolderPath does not exist: $rawFolderPath"
+    Add-Content $logFile "FATAL: does not exist: $rawFolderPath"
     exit 1
 }
-Start-Process explorer.exe -ArgumentList "\`"$rawFolderPath\`""
+$targetPath = (Resolve-Path -LiteralPath $rawFolderPath).Path.TrimEnd('\\')
+$shell = New-Object -ComObject Shell.Application
+$shell.Explore($targetPath)
+Add-Content $logFile "Explore() called for [$targetPath]"
 
 # 4. Find the Explorer window whose ACTUAL folder path matches the RAW path.
 # We match on Shell.Application's Document.Folder.Self.Path (a real filesystem
 # path, not a URI) so we can never latch onto an unrelated window like Documents.
-$targetPath = (Resolve-Path -LiteralPath $rawFolderPath).Path.TrimEnd('\')
-$shell = New-Object -ComObject Shell.Application
 $explorerHwnd = [IntPtr]::Zero
 $waited = 0
 while ($waited -lt 6000 -and $explorerHwnd -eq [IntPtr]::Zero) {
@@ -455,7 +465,7 @@ while ($waited -lt 6000 -and $explorerHwnd -eq [IntPtr]::Zero) {
         try {
             # Only real File Explorer windows expose a filesystem folder path
             $winPath = $w.Document.Folder.Self.Path
-            if ($winPath -and ($winPath.TrimEnd('\') -ieq $targetPath)) {
+            if ($winPath -and ($winPath.TrimEnd('\\') -ieq $targetPath)) {
                 $explorerHwnd = [IntPtr]$w.HWND
                 break
             }
@@ -465,10 +475,10 @@ while ($waited -lt 6000 -and $explorerHwnd -eq [IntPtr]::Zero) {
 
 if ($explorerHwnd -eq [IntPtr]::Zero) {
     Write-Error "ERROR: Could not find File Explorer window showing $targetPath"
-    Add-Content "$env:TEMP\gopro_robot_log.txt" "ERROR: no Explorer window matched [$targetPath]"
+    Add-Content $logFile "ERROR: no Explorer window matched [$targetPath]"
     exit 1
 }
-Add-Content "$env:TEMP\gopro_robot_log.txt" "MATCHED Explorer hwnd=$explorerHwnd for [$targetPath]"
+Add-Content $logFile "MATCHED Explorer hwnd=$explorerHwnd for [$targetPath]"
 
 $explorerEl = [System.Windows.Automation.AutomationElement]::FromHandle($explorerHwnd)
 if ($explorerEl -eq $null) {

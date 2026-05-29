@@ -6,6 +6,12 @@ import { defineConfig } from 'vite';
 export default defineConfig(() => {
   return {
     base: './',
+    define: {
+      // Injected at build time so the running app can show exactly which build it is.
+      __BUILD_TIME__: JSON.stringify(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })
+      ),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

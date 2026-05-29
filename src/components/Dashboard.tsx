@@ -1284,6 +1284,7 @@ export default function Dashboard() {
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl md:text-3xl font-black tracking-wider text-white">FPV CARD BOSS</h1>
             </div>
+            <p className="text-[10px] font-mono text-slate-500 mt-1">build {__BUILD_TIME__}</p>
           </div>
         </div>
 
