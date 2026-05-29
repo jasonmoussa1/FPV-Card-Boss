@@ -497,21 +497,45 @@ public class WindowManager {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int cmd);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int w, int h, bool repaint);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr ProcessId);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
 }
 "@
 
+# Restore + position the Explorer window at top-left
 [WindowManager]::ShowWindow($explorerHwnd, 9) | Out-Null  # SW_RESTORE
 Start-Sleep -Milliseconds 300
 [WindowManager]::MoveWindow($explorerHwnd, 0, 0, 600, 500, $true) | Out-Null
+Start-Sleep -Milliseconds 300
+
+# Force the Explorer window ABOVE this app and give it real keyboard focus.
+# SetForegroundWindow alone is blocked by Windows' foreground lock, so we:
+#  (1) pin it TOPMOST so it is guaranteed to draw on top of the app, and
+#  (2) AttachThreadInput to the current foreground thread so the focus change
+#      is allowed. Without this, Ctrl+A and the click land on the app instead.
+$HWND_TOPMOST = [IntPtr](-1)
+$HWND_NOTOPMOST = [IntPtr](-2)
+$SWP_FLAGS = 0x0043  # SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
+[WindowManager]::SetWindowPos($explorerHwnd, $HWND_TOPMOST, 0, 0, 0, 0, $SWP_FLAGS) | Out-Null
+
+$fgWin = [WindowManager]::GetForegroundWindow()
+$fgThread = [WindowManager]::GetWindowThreadProcessId($fgWin, [IntPtr]::Zero)
+$thisThread = [WindowManager]::GetCurrentThreadId()
+[WindowManager]::AttachThreadInput($thisThread, $fgThread, $true) | Out-Null
+[WindowManager]::BringWindowToTop($explorerHwnd) | Out-Null
+[WindowManager]::SetForegroundWindow($explorerHwnd) | Out-Null
+[WindowManager]::AttachThreadInput($thisThread, $fgThread, $false) | Out-Null
 Start-Sleep -Milliseconds 400
+Add-Content $logFile "Explorer forced topmost+focus at 0,0 600x500"
 
 Write-Host "WINDOWS_POSITIONED"
 # === END WINDOW MANAGEMENT ===
 
-[MouseRobot]::SetForegroundWindow($explorerHwnd)
-Start-Sleep -Milliseconds 400
-
-# Click center of Explorer window (positioned at 0,0 size 600x500)
+# Physically click inside the (now top-most) Explorer window to lock focus there
 [MouseRobot]::Click(300, 250)
 Start-Sleep -Milliseconds 300
 
@@ -562,6 +586,10 @@ for ($step = 1; $step -le 30; $step++) {
 Start-Sleep -Milliseconds 150
 [MouseRobot]::mouse_event(0x04, 0, 0, 0, 0)
 Start-Sleep -Milliseconds 1200
+
+# Files are now in GoPro — un-pin the Explorer window so it no longer sits on
+# top of GoPro's controls during the post-drop clicks.
+[WindowManager]::SetWindowPos($explorerHwnd, $HWND_NOTOPMOST, 0, 0, 0, 0, $SWP_FLAGS) | Out-Null
 
 # POST-DROP SEQUENCE
 
