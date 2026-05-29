@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Editor / local
+*.local
+.claude/settings.local.json
+
+# Secrets — service account keys, never commit
+credentials.json

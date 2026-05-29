@@ -1,0 +1,408 @@
+@import "tailwindcss";
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   FPV CARD BOSS — FPV Festival Slate Design System
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+:root {
+  --fpv-cyan:    #00e5ff;
+  --fpv-purple:  #b44fff;
+  --fpv-green:   #00ff88;
+  --fpv-red:     #ff5c7c;
+  --glass-bg:     rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  --glass-blur:   blur(20px) saturate(180%);
+}
+
+/* ── BACKGROUND GRADIENT MESH ── */
+html {
+  background:
+    radial-gradient(ellipse at 0% 100%, rgba(10,42,42,0.95) 0%, transparent 52%),
+    radial-gradient(ellipse at 100% 0%, rgba(42,10,58,0.95) 0%, transparent 52%),
+    #050508;
+  background-attachment: fixed;
+  min-height: 100%;
+}
+
+body {
+  background: transparent;
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #ffffff;
+}
+
+/* Subtle noise grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 300px 300px;
+  opacity: 0.038;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root,
+#fpv-boss-body {
+  background: transparent !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   GLASS PANELS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.bg-slate-900 {
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Header needs more opacity — content scrolls behind it */
+header.bg-slate-900 {
+  background: rgba(5, 5, 8, 0.84) !important;
+  backdrop-filter: blur(24px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.55) !important;
+}
+
+.bg-slate-950 {
+  background: rgba(0, 0, 0, 0.30) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.bg-slate-800 {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.bg-slate-700,
+.hover\:bg-slate-700:hover {
+  background: rgba(255, 255, 255, 0.10) !important;
+}
+
+footer.border-t {
+  background: rgba(5, 5, 8, 0.62) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   AMBER → ELECTRIC CYAN
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.text-amber-500,
+.text-amber-400 { color: var(--fpv-cyan) !important; }
+.text-amber-300  { color: rgba(0,229,255,0.72) !important; }
+.text-amber-200  { color: rgba(0,229,255,0.52) !important; }
+
+.bg-amber-500,
+.bg-amber-400 { background: var(--fpv-cyan) !important; }
+.hover\:bg-amber-600:hover,
+.hover\:bg-amber-400:hover { background: rgba(0,229,255,0.82) !important; }
+
+.border-amber-500,
+.border-amber-400 { border-color: rgba(0,229,255,0.40) !important; }
+
+.bg-amber-500\/10  { background: rgba(0,229,255,0.07) !important; }
+.bg-amber-500\/15  { background: rgba(0,229,255,0.10) !important; }
+.bg-amber-500\/20  { background: rgba(0,229,255,0.13) !important; }
+.bg-amber-500\/25  { background: rgba(0,229,255,0.16) !important; }
+.bg-amber-400\/5   { background: rgba(0,229,255,0.04) !important; }
+.hover\:bg-amber-500\/20:hover { background: rgba(0,229,255,0.13) !important; }
+
+.border-amber-500\/20 { border-color: rgba(0,229,255,0.20) !important; }
+.border-amber-500\/30 { border-color: rgba(0,229,255,0.30) !important; }
+.border-amber-500\/40 { border-color: rgba(0,229,255,0.40) !important; }
+.shadow-amber-500\/10 { box-shadow: 0 0 20px rgba(0,229,255,0.10) !important; }
+
+/* Gradient FROM/TO amber overrides (for icon badges etc.) */
+.from-amber-500 { --tw-gradient-from: var(--fpv-cyan) !important; }
+.to-amber-600,
+.to-amber-500   { --tw-gradient-to: var(--fpv-purple) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EMERALD → ELECTRIC GREEN (success / verified)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.text-emerald-400,
+.text-emerald-300 { color: var(--fpv-green) !important; }
+
+.bg-emerald-500\/10  { background: rgba(0,255,136,0.07) !important; }
+.bg-emerald-500\/15  { background: rgba(0,255,136,0.10) !important; }
+.bg-emerald-500\/20  { background: rgba(0,255,136,0.13) !important; }
+.bg-emerald-500\/40  { background: rgba(0,255,136,0.18) !important; }
+.bg-emerald-950\/40  { background: rgba(0,255,136,0.06) !important; }
+
+.border-emerald-500\/30 { border-color: rgba(0,255,136,0.30) !important; }
+.border-emerald-500\/40 { border-color: rgba(0,255,136,0.40) !important; }
+.border-emerald-400     { border-color: rgba(0,255,136,0.50) !important; }
+
+.bg-emerald-500,
+.bg-emerald-600 {
+  background: linear-gradient(135deg, #00ff88, #00cc6a) !important;
+  color: #050508 !important;
+}
+.hover\:bg-emerald-500:hover,
+.hover\:bg-emerald-400:hover { background: rgba(0,255,136,0.85) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CYAN (keep, just reinforce)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.text-cyan-400,
+.text-cyan-300 { color: var(--fpv-cyan) !important; }
+.bg-cyan-400,
+.bg-cyan-500   { background: var(--fpv-cyan) !important; }
+.hover\:bg-cyan-400:hover { background: rgba(0,229,255,0.82) !important; }
+.bg-cyan-400\/10 { background: rgba(0,229,255,0.07) !important; }
+.shadow-cyan-400\/30 { box-shadow: 0 0 16px rgba(0,229,255,0.30) !important; }
+
+/* Active pilot tab — gradient pill */
+.bg-cyan-400.text-black {
+  background: linear-gradient(135deg, var(--fpv-cyan), var(--fpv-purple)) !important;
+  color: #050508 !important;
+  box-shadow: 0 0 18px rgba(0,229,255,0.40) !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   VIOLET / PURPLE (Bella Social accent)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.text-violet-400,
+.text-violet-300  { color: var(--fpv-purple) !important; }
+.bg-violet-500    { background: var(--fpv-purple) !important; }
+.bg-violet-500\/10 { background: rgba(180,79,255,0.07) !important; }
+.hover\:bg-violet-500\/20:hover { background: rgba(180,79,255,0.13) !important; }
+.border-violet-500\/30 { border-color: rgba(180,79,255,0.30) !important; }
+.border-violet-500\/20 { border-color: rgba(180,79,255,0.20) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   INDIGO → CYAN-PURPLE GRADIENT (calibrate button, etc.)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.bg-indigo-600,
+.bg-indigo-500 {
+  background: linear-gradient(135deg, #00e5ff 0%, #7c3aed 100%) !important;
+  box-shadow: 0 0 20px rgba(0,229,255,0.35), 0 4px 14px rgba(0,0,0,0.4) !important;
+}
+.hover\:bg-indigo-500:hover,
+.active\:bg-indigo-700:active {
+  filter: brightness(1.07) !important;
+}
+.shadow-indigo-500\/20,
+.shadow-indigo-500\/25 { box-shadow: 0 0 20px rgba(0,229,255,0.25) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ROSE → VIVID RED
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.text-rose-400,
+.text-rose-300,
+.text-rose-500  { color: var(--fpv-red) !important; }
+
+.bg-rose-500\/10 { background: rgba(255,92,124,0.07) !important; }
+.bg-rose-500\/20 { background: rgba(255,92,124,0.12) !important; }
+.bg-rose-950\/20,
+.bg-rose-950\/30,
+.bg-rose-950\/40,
+.bg-rose-950\/50 { background: rgba(255,92,124,0.06) !important; }
+.hover\:bg-rose-950\/40:hover,
+.hover\:bg-rose-950\/50:hover { background: rgba(255,92,124,0.10) !important; }
+.border-rose-950\/50 { border-color: rgba(255,92,124,0.20) !important; }
+
+.bg-rose-600,
+.bg-rose-500 { background: var(--fpv-red) !important; }
+.hover\:bg-rose-500:hover { background: rgba(255,92,124,0.82) !important; }
+
+.border-rose-500\/20 { border-color: rgba(255,92,124,0.20) !important; }
+.border-rose-500\/30 { border-color: rgba(255,92,124,0.30) !important; }
+.border-rose-500\/40 { border-color: rgba(255,92,124,0.40) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SLATE TEXT HIERARCHY
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.text-slate-100 { color: rgba(255,255,255,0.93) !important; }
+.text-slate-200 { color: rgba(255,255,255,0.80) !important; }
+.text-slate-300 { color: rgba(255,255,255,0.65) !important; }
+.text-slate-400 { color: rgba(255,255,255,0.45) !important; }
+.text-slate-500 { color: rgba(255,255,255,0.28) !important; }
+.text-slate-600 { color: rgba(255,255,255,0.18) !important; }
+.text-white     { color: #ffffff !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BORDERS & DIVIDERS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.border-slate-900 { border-color: rgba(255,255,255,0.05) !important; }
+.border-slate-800 { border-color: rgba(255,255,255,0.08) !important; }
+.border-slate-700 { border-color: rgba(255,255,255,0.11) !important; }
+.divide-slate-900 > * + * { border-color: rgba(255,255,255,0.05) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SELECTION
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+::selection {
+  background: rgba(0,229,255,0.28) !important;
+  color: #ffffff !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   INPUTS, TEXTAREAS, SELECTS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+input,
+textarea,
+select {
+  background: rgba(0,0,0,0.32) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 12px !important;
+  color: var(--fpv-cyan) !important;
+  font-family: 'Space Mono', monospace;
+}
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255,255,255,0.25) !important;
+  font-size: 0.70rem;
+  letter-spacing: 0.05em;
+  font-family: 'Inter', sans-serif;
+  font-style: normal;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+  border-color: rgba(0,229,255,0.50) !important;
+  box-shadow: 0 0 0 2px rgba(0,229,255,0.14) !important;
+}
+select option {
+  background: #0d1117;
+  color: var(--fpv-cyan);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TYPOGRAPHY
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+h1, h2, h3 {
+  font-family: 'Orbitron', sans-serif !important;
+  letter-spacing: 0.06em;
+}
+
+.font-mono,
+code,
+pre {
+  font-family: 'Space Mono', monospace !important;
+}
+
+kbd {
+  font-family: 'Space Mono', monospace !important;
+  background: rgba(255,255,255,0.08) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: rgba(255,255,255,0.80) !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CARD ID GLOW  (custom class added in Dashboard.tsx)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.card-id-glow {
+  font-family: 'Orbitron', sans-serif !important;
+  font-weight: 900 !important;
+  color: var(--fpv-cyan) !important;
+  text-shadow:
+    0 0 18px rgba(0,229,255,0.90),
+    0 0 45px rgba(0,229,255,0.50),
+    0 0 90px rgba(0,229,255,0.25) !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   COMPLETE CARD BUTTON  (custom class added in Dashboard.tsx)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.btn-complete-card {
+  background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%) !important;
+  font-family: 'Orbitron', sans-serif !important;
+  font-weight: 900 !important;
+  color: #050508 !important;
+  letter-spacing: 0.10em !important;
+  border: none !important;
+  border-radius: 14px !important;
+  box-shadow: 0 0 28px rgba(0,255,136,0.50), 0 6px 24px rgba(0,0,0,0.45) !important;
+}
+.btn-complete-card:hover:not(:disabled) {
+  filter: brightness(1.06) !important;
+  box-shadow: 0 0 40px rgba(0,255,136,0.65), 0 6px 24px rgba(0,0,0,0.45) !important;
+}
+.btn-complete-card:disabled {
+  background: rgba(255,255,255,0.05) !important;
+  box-shadow: none !important;
+  color: rgba(255,255,255,0.18) !important;
+  cursor: not-allowed !important;
+  filter: none !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   AUTO-RUN ROBOT BUTTON  (custom class added in Dashboard.tsx)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.btn-run-robot {
+  background: linear-gradient(135deg, #00e5ff 0%, #7c3aed 100%) !important;
+  font-family: 'Orbitron', sans-serif !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.55) !important;
+  letter-spacing: 0.08em !important;
+  border: none !important;
+  box-shadow: 0 0 22px rgba(0,229,255,0.42), 0 4px 18px rgba(0,0,0,0.45) !important;
+}
+.btn-run-robot:hover:not(:disabled) {
+  filter: brightness(1.06) !important;
+  box-shadow: 0 0 34px rgba(0,229,255,0.60), 0 4px 18px rgba(0,0,0,0.45) !important;
+}
+.btn-run-robot:disabled {
+  opacity: 0.42 !important;
+  cursor: not-allowed !important;
+  filter: none !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PROGRESS BAR FILLS  (custom class added in Dashboard.tsx)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.progress-gradient {
+  background: linear-gradient(90deg, var(--fpv-cyan) 0%, var(--fpv-purple) 100%) !important;
+  box-shadow: 0 0 12px rgba(0,229,255,0.50) !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TABLE
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+table { background: transparent !important; }
+thead tr { background: rgba(0,229,255,0.04) !important; backdrop-filter: none !important; border: none !important; box-shadow: none !important; }
+tbody tr:hover { background: rgba(255,255,255,0.025) !important; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SCROLLBAR
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(0,229,255,0.28);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,229,255,0.52);
+}

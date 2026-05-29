@@ -1,0 +1,54 @@
+{
+  "name": "fpv-card-boss",
+  "private": true,
+  "version": "1.2.0",
+  "type": "module",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit",
+    "dev:electron": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && electron .\"",
+    "build:exe": "tsc --noEmit && vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.fpvcardboss.app",
+    "productName": "FPV Card Boss",
+    "directories": {
+      "output": "C:/Temp/fpv-card-boss-release"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "preload.cjs",
+      "calibration.html"
+    ]
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "wait-on": "^9.0.10"
+  }
+}
