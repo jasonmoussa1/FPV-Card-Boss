@@ -52,183 +52,6 @@ function cleanFolderName(input: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
-interface GoProStatusPanelProps {
-  goProRobotStatus: 'idle' | 'running' | 'success' | 'error';
-  goProRobotError: string | null;
-  goProExportStatus: 'idle' | 'polling' | 'complete' | 'error';
-  goProExportProgress: { fileCount: number; expectedCount: number; totalSizeMB: number; countLabel: string } | null;
-  goProExportError: string | null;
-  moveExportsStatus: 'idle' | 'moving' | 'success' | 'error';
-  moveExportsResult: { files: string[]; moved: number; totalGB?: number } | null;
-  moveExportsError: string | null;
-  robotStartTime: number | null;
-  goProOutputPath: string;
-  onRunRobot: () => void;
-  onMoveExports: () => void;
-  onResetModule: () => void;
-  preFlightDisplay?: React.ReactNode;
-  deliveryDisplay?: React.ReactNode;
-}
-
-function GoProStatusPanel({
-  goProRobotStatus, goProRobotError,
-  goProExportStatus, goProExportProgress, goProExportError,
-  moveExportsStatus, moveExportsResult, moveExportsError,
-  robotStartTime, goProOutputPath,
-  onRunRobot, onMoveExports, onResetModule,
-  preFlightDisplay, deliveryDisplay,
-}: GoProStatusPanelProps) {
-  return (
-    <div className="space-y-2">
-      {preFlightDisplay}
-
-      <button
-        onClick={onRunRobot}
-        disabled={goProRobotStatus === 'running'}
-        className="btn-run-robot w-full py-4 text-lg uppercase tracking-widest rounded-2xl transition-colors"
-      >
-        🤖 AUTO-RUN GOPRO BATCH
-      </button>
-      <p className="text-center text-[10px] text-rose-400 font-black leading-relaxed">
-        ⚠️ WARNING: Takes over mouse/keyboard. Do not touch your computer while running!
-      </p>
-
-      {goProRobotStatus === 'running' && (
-        <div className="w-full py-3 px-4 rounded-xl bg-amber-500/20 border border-amber-500/40 animate-pulse">
-          <p className="text-center text-sm font-black text-amber-400 uppercase tracking-widest">
-            🤖 ROBOT IS RUNNING — DO NOT TOUCH MOUSE OR KEYBOARD
-          </p>
-        </div>
-      )}
-      {goProRobotStatus === 'success' && moveExportsStatus !== 'success' && (
-        <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40">
-          <p className="text-center text-sm font-black text-emerald-400 uppercase tracking-widest">
-            {goProExportStatus === 'complete'
-              ? '✓ GoPro export complete — move files below'
-              : '✓ Robot clicked Start — monitoring export...'}
-          </p>
-        </div>
-      )}
-      {goProRobotStatus === 'success' && moveExportsStatus === 'success' && (
-        <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40">
-          <p className="text-center text-sm font-black text-emerald-400 uppercase tracking-widest">
-            ✓ GoPro export sequence completed
-          </p>
-        </div>
-      )}
-      {goProRobotStatus === 'error' && (
-        <div className="w-full py-3 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40 space-y-1">
-          {goProRobotError?.includes('Export Queue window not found') ? (
-            <>
-              <p className="text-center text-sm font-black text-rose-400 uppercase tracking-widest">
-                ✗ GoPro Batch Exporter is not open
-              </p>
-              <p className="text-center text-xs font-bold text-rose-300">
-                Open GoPro Player → Batch Exporter manually, then run the robot again
-              </p>
-            </>
-          ) : (
-            <p className="text-center text-sm font-black text-rose-400 uppercase tracking-widest">
-              ✗ Robot failed — check GoPro Player and recalibrate
-            </p>
-          )}
-        </div>
-      )}
-
-      {goProRobotStatus === 'success' && moveExportsStatus !== 'success' && robotStartTime !== null && (
-        <div className="space-y-3 pt-2">
-          {(goProExportStatus === 'idle' || goProExportStatus === 'polling') && (
-            <div className="w-full py-3 px-4 rounded-xl bg-amber-500/15 border border-amber-500/30 animate-pulse">
-              <p className="text-center text-sm font-black text-amber-400 uppercase tracking-widest">
-                {goProExportProgress
-                  ? `⏳ EXPORTING... ${goProExportProgress.countLabel} — ${goProExportProgress.totalSizeMB.toLocaleString()} MB`
-                  : '⏳ WAITING FOR GOPRO EXPORT TO START...'}
-              </p>
-              <p className="text-center text-[10px] text-slate-400 mt-1 font-mono truncate">
-                Monitoring: {goProOutputPath}
-              </p>
-            </div>
-          )}
-          {goProExportStatus === 'complete' && (
-            <>
-              <div className="w-full py-3 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
-                <p className="text-center text-sm font-black text-emerald-400 uppercase tracking-widest">
-                  ✅ EXPORT COMPLETE — {goProExportProgress?.countLabel ?? 'files ready'}
-                </p>
-                <p className="text-center text-[10px] text-slate-400 mt-1 font-mono truncate">
-                  {goProExportProgress && goProExportProgress.totalSizeMB > 0
-                    ? `${goProExportProgress.totalSizeMB.toLocaleString()} MB detected`
-                    : 'Files are stable and ready to move'}
-                </p>
-              </div>
-              <button
-                onClick={onMoveExports}
-                disabled={moveExportsStatus === 'moving'}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm uppercase tracking-widest rounded-2xl transition-colors"
-              >
-                {moveExportsStatus === 'moving' ? '⏳ MOVING FILES...' : '✅ MOVE FILES TO STABILIZED FOLDER'}
-              </button>
-            </>
-          )}
-          {goProExportStatus === 'error' && (
-            <div className="w-full py-3 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40 space-y-2">
-              <p className="text-center text-sm font-black text-rose-400 uppercase tracking-widest">
-                ✗ EXPORT MONITORING FAILED
-              </p>
-              <p className="text-center text-xs text-rose-300 font-mono">{goProExportError}</p>
-              <button
-                onClick={onMoveExports}
-                disabled={moveExportsStatus === 'moving'}
-                className="w-full py-3 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-50 text-rose-300 font-black text-sm uppercase tracking-widest rounded-xl transition-colors"
-              >
-                {moveExportsStatus === 'moving' ? '⏳ MOVING FILES...' : 'MOVE FILES MANUALLY'}
-              </button>
-            </div>
-          )}
-          {moveExportsStatus === 'error' && (
-            <div className="w-full py-2 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40">
-              <p className="text-center text-xs font-black text-rose-400">✗ {moveExportsError}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {moveExportsStatus === 'success' && moveExportsResult && (
-        <div className="space-y-2 pt-2">
-          <div className="w-full py-2 px-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40">
-            <p className="text-center text-sm font-black text-emerald-400 uppercase tracking-widest">
-              ✓ Moved {moveExportsResult.moved} file{moveExportsResult.moved !== 1 ? 's' : ''} to STABILIZED folder
-            </p>
-            {moveExportsResult.totalGB !== undefined && (
-              <p className="text-center text-xs font-black text-cyan-400 mt-1">
-                Card folder total: {moveExportsResult.totalGB.toFixed(2)} GB
-              </p>
-            )}
-          </div>
-          {moveExportsResult.files.length > 0 && (
-            <div className="bg-slate-950 rounded-xl p-3 max-h-28 overflow-y-auto">
-              {moveExportsResult.files.map((f, i) => (
-                <p key={i} className="text-[10px] font-mono text-slate-400 truncate">{f}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {deliveryDisplay}
-
-      <div className="pt-2 border-t border-slate-800">
-        <button
-          onClick={onResetModule}
-          className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-sm uppercase tracking-widest rounded-xl transition"
-        >
-          🔄 RESET MODULE
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const [config, setConfig] = useState<FpvConfig>(() => {
     const saved = localStorage.getItem('fpv_boss_config');
@@ -3025,13 +2848,10 @@ export default function Dashboard() {
             {/* Simple Mode — Two-column layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-              {/* LEFT: Active Card Setup + Workflow */}
-              <div className="flex flex-col gap-8">
-
-                {/* 1. ACTIVE CARD SETUP */}
-                <div className="bg-slate-900 rounded-3xl p-8 space-y-6 shadow-xl">
+              {/* LEFT: Card Setup */}
+              <div className="bg-slate-900 rounded-3xl p-8 space-y-6 shadow-xl">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                    <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest">1. CARD SETUP + WORKFLOW</h3>
+                    <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest">1. CARD SETUP</h3>
                     <span className="text-[10px] bg-cyan-400/10 text-cyan-400 px-3 py-1 rounded font-black uppercase border border-cyan-400/20">
                       {config.eventName || 'EVENT'}
                     </span>
@@ -3102,10 +2922,12 @@ export default function Dashboard() {
                   >
                     ✕ CLEAR FOLDER NAME
                   </button>
+              </div>
 
-                  {/* WORKFLOW (same module) */}
-                  <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest border-b border-slate-800 pb-4 pt-4">
-                    WORKFLOW
+              {/* 2. WORKFLOW — right cell, everything in one place */}
+              <div className="bg-slate-900 rounded-3xl p-8 space-y-4 shadow-xl">
+                  <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest border-b border-slate-800 pb-4">
+                    2. WORKFLOW
                   </h3>
                   <div className="space-y-3">
                     <button
@@ -3185,6 +3007,48 @@ export default function Dashboard() {
                     >
                       {goProRobotStatus === 'running' ? '🤖 ROBOT RUNNING...' : '🤖 RUN GOPRO ROBOT'}
                     </button>
+
+                    {/* GoPro export tracker (inline) */}
+                    {goProRobotStatus === 'running' && (
+                      <div className="w-full py-2 px-4 rounded-xl bg-amber-500/20 border border-amber-500/40 animate-pulse">
+                        <p className="text-center text-xs font-black text-amber-400 uppercase tracking-widest">
+                          🤖 ROBOT RUNNING — DO NOT TOUCH MOUSE OR KEYBOARD
+                        </p>
+                      </div>
+                    )}
+                    {goProRobotStatus === 'error' && (
+                      <div className="w-full py-2 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40">
+                        <p className="text-center text-xs font-black text-rose-400 uppercase tracking-widest">
+                          ✗ Robot failed — check GoPro Player and recalibrate
+                        </p>
+                      </div>
+                    )}
+                    {goProRobotStatus === 'success' && moveExportsStatus !== 'success' && robotStartTime !== null && (
+                      <>
+                        {(goProExportStatus === 'idle' || goProExportStatus === 'polling') && (
+                          <div className="w-full py-2 px-4 rounded-xl bg-amber-500/15 border border-amber-500/30 animate-pulse">
+                            <p className="text-center text-xs font-black text-amber-400 uppercase tracking-widest">
+                              {goProExportProgress
+                                ? `⏳ EXPORTING... ${goProExportProgress.countLabel} — ${goProExportProgress.totalSizeMB.toLocaleString()} MB`
+                                : '⏳ WAITING FOR GOPRO EXPORT TO START...'}
+                            </p>
+                          </div>
+                        )}
+                        {goProExportStatus === 'complete' && (
+                          <div className="w-full py-2 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+                            <p className="text-center text-xs font-black text-emerald-400 uppercase tracking-widest">
+                              ✅ EXPORT COMPLETE — {goProExportProgress?.countLabel ?? 'files ready'}
+                            </p>
+                          </div>
+                        )}
+                        {goProExportStatus === 'error' && (
+                          <div className="w-full py-2 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40">
+                            <p className="text-center text-xs font-black text-rose-400 uppercase tracking-widest">✗ EXPORT MONITORING FAILED</p>
+                            {goProExportError && <p className="text-center text-[10px] text-rose-300 font-mono">{goProExportError}</p>}
+                          </div>
+                        )}
+                      </>
+                    )}
 
                     <button
                       onClick={handleSimpleMoveExports}
@@ -3301,36 +3165,6 @@ export default function Dashboard() {
                     </button>
                   </div>
                 </div>
-              </div>
-
-              {/* RIGHT: GoPro Batch Exporter */}
-              <div className="bg-slate-900 rounded-3xl p-8 space-y-5 shadow-xl">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <h3 className="text-sm font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-rose-500" /> 2. GOPRO BATCH EXPORTER
-                  </h3>
-                </div>
-                <GoProStatusPanel
-                  goProRobotStatus={goProRobotStatus}
-                  goProRobotError={goProRobotError}
-                  goProExportStatus={goProExportStatus}
-                  goProExportProgress={goProExportProgress}
-                  goProExportError={goProExportError}
-                  moveExportsStatus={moveExportsStatus}
-                  moveExportsResult={moveExportsResult}
-                  moveExportsError={moveExportsError}
-                  robotStartTime={robotStartTime}
-                  goProOutputPath={config.goProOutputPath || 'C:\\Users\\Jason\\Videos'}
-                  onRunRobot={handleSimpleRunRobot}
-                  onMoveExports={handleSimpleMoveExports}
-                  onResetModule={() => {
-                    setGoProRobotStatus('idle'); setGoProRobotError(null);
-                    setGoProExportStatus('idle'); setGoProExportProgress(null); setGoProExportError(null);
-                    setMoveExportsStatus('idle'); setMoveExportsResult(null); setMoveExportsError(null);
-                    setRobotStartTime(null);
-                  }}
-                />
-              </div>
             </div>
 
             {/* 4. SESSION LOG */}
