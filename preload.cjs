@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electron', {
   copyToBellaDrive: (data) => ipcRenderer.invoke('copy-to-bella-drive', data),
   onBellaDriveCopyProgress: (callback) => ipcRenderer.on('bella-drive-copy-progress', (_event, pct) => callback(pct)),
   offBellaDriveCopyProgress: () => ipcRenderer.removeAllListeners('bella-drive-copy-progress'),
+  deleteSdRawFiles: (data) => ipcRenderer.invoke('delete-sd-raw-files', data),
   saveCalibration: (coords) => ipcRenderer.invoke('save-calibration', { coords }),
   loadCalibration: () => ipcRenderer.invoke('load-calibration'),
   onGoProRemoveComplete: (callback) => ipcRenderer.on('gopro-remove-complete', () => callback()),

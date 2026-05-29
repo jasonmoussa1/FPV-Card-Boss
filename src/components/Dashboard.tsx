@@ -17,6 +17,7 @@ import {
   copySDtoRAW,
   copyToMedia,
   copyToBella,
+  deleteSdRawFiles,
   openFolderInExplorer,
   selectFolder,
   runGoProRobot,
@@ -366,6 +367,10 @@ export default function Dashboard() {
   const [bellaDriveCopyProgress, setBellaDriveCopyProgress] = useState<number | null>(null);
   const [bellaDriveCopyResult, setBellaDriveCopyResult] = useState<{ artistName: string; fileCount: number; sizeGB: string } | null>(null);
   const [bellaDriveCopyError, setBellaDriveCopyError] = useState<string | null>(null);
+
+  const [sdDeleteStatus, setSdDeleteStatus] = useState<'idle' | 'deleting' | 'success' | 'error'>('idle');
+  const [sdDeleteResult, setSdDeleteResult] = useState<{ deletedCount: number; freedGB: string } | null>(null);
+  const [sdDeleteError, setSdDeleteError] = useState<string | null>(null);
 
   const [preFlightStatus, setPreFlightStatus] = useState<'idle' | 'checking' | 'passed' | 'failed'>('idle');
   const [preFlightErrors, setPreFlightErrors] = useState<string[]>([]);
@@ -775,6 +780,9 @@ export default function Dashboard() {
     setBellaDriveCopyProgress(null);
     setBellaDriveCopyResult(null);
     setBellaDriveCopyError(null);
+    setSdDeleteStatus('idle');
+    setSdDeleteResult(null);
+    setSdDeleteError(null);
     setPreFlightStatus('idle');
     setPreFlightErrors([]);
     setPreFlightWarnings([]);
@@ -961,6 +969,42 @@ export default function Dashboard() {
       setBellaDriveCopyStatus('error');
     } finally {
       setBellaDriveCopyProgress(null);
+    }
+  };
+
+  const handleDeleteSdFiles = async () => {
+    const sdPath = config.sdCardDrive?.trim();
+    if (!sdPath) {
+      setSdDeleteError('No SD Card Drive is set in Setup.');
+      setSdDeleteStatus('error');
+      return;
+    }
+    const confirmed = confirm(
+      `Permanently delete GoPro footage files (.MP4, .LRV, .THM, .GPR, .360) from the SD card?\n\n` +
+      `SD card: ${sdPath}\n\n` +
+      `This removes the video files everywhere on the card (including DCIM\\100GOPRO) but keeps the folders. ` +
+      `It cannot be undone — only do this once your files are moved and delivered.`
+    );
+    if (!confirmed) return;
+
+    setSdDeleteStatus('deleting');
+    setSdDeleteError(null);
+    setSdDeleteResult(null);
+    try {
+      const result = await deleteSdRawFiles({
+        sdDrivePath: sdPath,
+        protectedRoots: [config.localRootPath, config.mediaRootPath, config.bellaRootPath],
+      });
+      if (result?.success) {
+        setSdDeleteResult({ deletedCount: result.deletedCount ?? 0, freedGB: result.freedGB ?? '0.00' });
+        setSdDeleteStatus('success');
+      } else {
+        setSdDeleteError(result?.message ?? 'Unknown error deleting SD card files.');
+        setSdDeleteStatus('error');
+      }
+    } catch (err: unknown) {
+      setSdDeleteError(String(err));
+      setSdDeleteStatus('error');
     }
   };
 
@@ -2687,6 +2731,38 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {/* CLEAR SD CARD — only after footage is safely moved to STABILIZED */}
+                {moveExportsStatus === 'success' && (
+                  <div className="space-y-1.5 pt-3 border-t border-slate-800">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">
+                      SD CARD
+                    </p>
+                    <button
+                      disabled={sdDeleteStatus === 'deleting'}
+                      onClick={handleDeleteSdFiles}
+                      className={`w-full py-3 px-6 rounded-full font-black text-sm uppercase tracking-widest transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                        sdDeleteStatus === 'success'
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-rose-900 text-rose-200 hover:bg-rose-800'
+                      }`}
+                    >
+                      {sdDeleteStatus === 'deleting'
+                        ? '⏳ DELETING SD FILES...'
+                        : sdDeleteStatus === 'success'
+                        ? '✓ SD CARD CLEARED'
+                        : `🗑 DELETE RAW FILES FROM SD (${config.sdCardDrive})`}
+                    </button>
+                    {sdDeleteStatus === 'success' && sdDeleteResult && (
+                      <p className="text-center text-[10px] font-mono text-rose-300">
+                        Deleted {sdDeleteResult.deletedCount} file{sdDeleteResult.deletedCount !== 1 ? 's' : ''} — freed {sdDeleteResult.freedGB} GB
+                      </p>
+                    )}
+                    {sdDeleteStatus === 'error' && sdDeleteError && (
+                      <p className="text-center text-[10px] font-mono text-rose-400 break-all">✗ {sdDeleteError}</p>
+                    )}
+                  </div>
+                )}
+
                 {goProQueueCleared && (
                   <div className="w-full py-2 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
                     <p className="text-center text-xs font-black text-emerald-400 uppercase tracking-widest">
@@ -2707,6 +2783,9 @@ export default function Dashboard() {
                       setMoveExportsResult(null);
                       setMoveExportsError(null);
                       setRobotStartTime(null);
+                      setSdDeleteStatus('idle');
+                      setSdDeleteResult(null);
+                      setSdDeleteError(null);
                       setPreFlightStatus('idle');
                       setPreFlightErrors([]);
                       setPreFlightWarnings([]);
@@ -3111,6 +3190,7 @@ export default function Dashboard() {
                         setRobotStartTime(null); setSimpleFolderStatus('idle');
                         setMediaDriveCopyStatus('idle'); setMediaDriveCopyProgress(null); setMediaDriveCopyResult(null); setMediaDriveCopyError(null);
                         setBellaDriveCopyStatus('idle'); setBellaDriveCopyProgress(null); setBellaDriveCopyResult(null); setBellaDriveCopyError(null);
+                        setSdDeleteStatus('idle'); setSdDeleteResult(null); setSdDeleteError(null);
                         setSdCopyResult(null); setCopyProgress(null);
                       }}
                       className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 font-black text-xs uppercase tracking-widest rounded-xl transition"

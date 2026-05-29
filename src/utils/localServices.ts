@@ -51,6 +51,14 @@ export async function runGoProRobot(coords: any, rawPath: string, stabilizedPath
   return { success: true, message: 'Mock robot', robotStartTime: Date.now() };
 }
 
+export async function deleteSdRawFiles(data: { sdDrivePath: string; protectedRoots: string[] }): Promise<{ success: boolean; message?: string; deletedCount?: number; freedGB?: string; errors?: string[] }> {
+  if (window.electron) {
+    return window.electron.deleteSdRawFiles(data);
+  }
+  console.log('Mock: deleteSdRawFiles', data);
+  return { success: true, deletedCount: 0, freedGB: '0.00' };
+}
+
 export async function selectFolder(): Promise<string | null> {
   if (window.electron) {
     return window.electron.selectFolder();

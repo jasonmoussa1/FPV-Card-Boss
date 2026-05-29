@@ -955,3 +955,67 @@ ipcMain.handle('copy-sd-to-raw', async (event, { sdDriveLetter, targetRawPath })
     return { success: false, message: err.message };
   }
 });
+
+// Deletes GoPro footage files from the SD card only. Recursive (incl. DCIM\100GOPRO),
+// keeps the folder structure, and only removes known GoPro media extensions.
+// Hard safety guards refuse the system drive and any configured working drive.
+ipcMain.handle('delete-sd-raw-files', async (_event, { sdDrivePath, protectedRoots }) => {
+  try {
+    const driveLetter = (p) => {
+      const m = String(p || '').trim().match(/^([A-Za-z]):/);
+      return m ? (m[1].toUpperCase() + ':') : '';
+    };
+
+    const sdRaw = String(sdDrivePath || '').trim();
+    if (!sdRaw) return { success: false, message: 'No SD Card Drive is set in Setup.' };
+
+    const sdDrive = driveLetter(sdRaw);
+    if (!sdDrive) return { success: false, message: `SD Card Drive is not a valid drive path: ${sdRaw}` };
+
+    // Safety 1 — never the system drive
+    const systemDrive = (process.env.SystemDrive || 'C:').toUpperCase();
+    if (sdDrive === systemDrive) {
+      return { success: false, message: `Refusing to delete from the system drive (${systemDrive}). Check the SD Card Drive setting.` };
+    }
+
+    // Safety 2 — never a configured working / media / Bella drive
+    const protectedDrives = (protectedRoots || []).map(driveLetter).filter(Boolean);
+    if (protectedDrives.includes(sdDrive)) {
+      return { success: false, message: `Refusing to delete: ${sdDrive} is one of your working/media/Bella drives, not an SD card. Check the SD Card Drive setting.` };
+    }
+
+    if (!fs.existsSync(sdRaw)) {
+      return { success: false, message: `SD card not found at ${sdRaw} — is it inserted?` };
+    }
+
+    const VIDEO_EXTS = new Set(['.mp4', '.lrv', '.thm', '.gpr', '.360']);
+    let deletedCount = 0;
+    let freedBytes = 0;
+    const errors = [];
+
+    const walk = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full); // recurse but keep the folder itself
+        } else if (entry.isFile() && VIDEO_EXTS.has(path.extname(entry.name).toLowerCase())) {
+          try {
+            const sz = fs.statSync(full).size;
+            fs.unlinkSync(full);
+            deletedCount++;
+            freedBytes += sz;
+          } catch (e) {
+            errors.push(`${entry.name}: ${e.message}`);
+          }
+        }
+      }
+    };
+    walk(sdRaw);
+
+    return { success: true, deletedCount, freedGB: (freedBytes / (1024 ** 3)).toFixed(2), errors };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});

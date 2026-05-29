@@ -35,6 +35,7 @@ interface ElectronBridge {
   copyToBellaDrive(data: { localStabilizedPath: string; bellaDestPath: string; artistName: string }): Promise<{ success: boolean; message?: string; artistName?: string; fileCount?: number; sizeGB?: string }>;
   onBellaDriveCopyProgress(callback: (pct: number) => void): void;
   offBellaDriveCopyProgress(): void;
+  deleteSdRawFiles(data: { sdDrivePath: string; protectedRoots: string[] }): Promise<{ success: boolean; message?: string; deletedCount?: number; freedGB?: string; errors?: string[] }>;
   saveCalibration(coords: unknown): Promise<{ success: boolean; error?: string }>;
   loadCalibration(): Promise<{ found: true; coords: unknown; hostname: string; width: number; height: number; savedAt: string; key: string } | { found: false }>;
   onGoProRemoveComplete(callback: () => void): void;
