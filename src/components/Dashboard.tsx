@@ -603,6 +603,23 @@ export default function Dashboard() {
     });
   }, [allAssignments, selectedDaySection, selectedPilot, history, skippedAssignments]);
 
+  // Full list of every assignment for the current day/pilot, regardless of
+  // completion or skip status. Drives the "Choose from list" picker so an
+  // artist can always be re-selected even after their card was completed.
+  const pickerAssignments = useMemo(() => {
+    return allAssignments
+      .filter(a => a.daySection === selectedDaySection && a.pilot === selectedPilot)
+      .map(a => ({
+        ...a,
+        isCompleted: history.some(
+          h => h.assignment.toUpperCase() === a.assignment.toUpperCase() &&
+               h.daySection === selectedDaySection &&
+               h.pilot === selectedPilot &&
+               h.status === 'Complete'
+        ),
+      }));
+  }, [allAssignments, selectedDaySection, selectedPilot, history]);
+
   const firstAssignmentInQueue = activeQueue[0];
   const activeAssignmentName = useMemo(() => {
     if (customAssignmentOverride) return customAssignmentOverride;
@@ -1788,7 +1805,7 @@ export default function Dashboard() {
                 {activeQueue.length} <span className="text-xs text-slate-400 font-bold">sets remaining</span>
               </span>
             </div>
-            {activeQueue.length > 0 && (
+            {pickerAssignments.length > 0 && (
               <button
                 onClick={() => setIsPickerOpen(true)}
                 className="px-4 py-2.5 bg-slate-800 text-slate-100 hover:bg-slate-700 text-xs font-black rounded-lg transition"
@@ -3366,11 +3383,11 @@ export default function Dashboard() {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-2 flex-grow">
-              {activeQueue.length === 0 ? (
-                <p className="text-xs text-slate-500 italic text-center py-4">No remaining assignments left in this slot queue.</p>
+              {pickerAssignments.length === 0 ? (
+                <p className="text-xs text-slate-500 italic text-center py-4">No assignments for this pilot / day.</p>
               ) : (
                 <div className="space-y-2">
-                  {activeQueue.map((item, idx) => (
+                  {pickerAssignments.map((item, idx) => (
                     <div
                       key={`${item.assignment}-${idx}`}
                       onClick={() => handlePickAssignment(item.assignment)}
@@ -3382,6 +3399,11 @@ export default function Dashboard() {
                       </div>
 
                       <div className="shrink-0 flex items-center gap-2">
+                        {item.isCompleted && (
+                          <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/15 px-2 py-1 rounded uppercase tracking-wider">
+                            ✓ Done
+                          </span>
+                        )}
                         <span className="text-[9px] font-mono font-black text-slate-400 bg-slate-900 px-2 py-1 rounded">
                           ⏱️ {item.flyTime || 'ANY'}
                         </span>
