@@ -372,6 +372,8 @@ export default function Dashboard() {
   const [sdDeleteResult, setSdDeleteResult] = useState<{ deletedCount: number; freedGB: string } | null>(null);
   const [sdDeleteError, setSdDeleteError] = useState<string | null>(null);
 
+  const [foldersCreatedStatus, setFoldersCreatedStatus] = useState<'idle' | 'creating' | 'done'>('idle');
+
   const [preFlightStatus, setPreFlightStatus] = useState<'idle' | 'checking' | 'passed' | 'failed'>('idle');
   const [preFlightErrors, setPreFlightErrors] = useState<string[]>([]);
   const [preFlightWarnings, setPreFlightWarnings] = useState<string[]>([]);
@@ -670,6 +672,12 @@ export default function Dashboard() {
     const segs = [root, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist].filter(s => s && s.trim().length > 0);
     return segs.join('\\') + '\\STABILIZED';
   }, [config.localRootPath, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist, sanitizedCard, activeAssignmentName]);
+
+  // Reset the "Created" confirmation whenever the target folder changes (switching
+  // artist/pilot/day, or after completing a card advances the queue).
+  useEffect(() => {
+    setFoldersCreatedStatus('idle');
+  }, [localRawPath]);
 
   const destinationMediaDrivePath = useMemo(() => {
     const root = config.mediaRootPath.trim();
@@ -2211,15 +2219,32 @@ export default function Dashboard() {
                   <Folder className="w-5 h-5 text-cyan-400" /> COPIER WORKSPACE DIRECTORIES
                 </span>
                 <button
-                  onClick={() => createLocalFolders({
-                    rawPath: localRawPath,
-                    stabilizedPath: localStabilizedPath,
-                    mediaDrivePath: (config.driveToggles?.mediaDrive ?? true) ? destinationMediaDrivePath : '',
-                    bellaSocialPath: (config.driveToggles?.bellaDrive ?? true) ? destinationBellaSocialPath : ''
-                  })}
-                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/20 rounded text-xs font-black uppercase tracking-wider transition"
+                  disabled={foldersCreatedStatus === 'creating'}
+                  onClick={async () => {
+                    setFoldersCreatedStatus('creating');
+                    try {
+                      await createLocalFolders({
+                        rawPath: localRawPath,
+                        stabilizedPath: localStabilizedPath,
+                        mediaDrivePath: (config.driveToggles?.mediaDrive ?? true) ? destinationMediaDrivePath : '',
+                        bellaSocialPath: (config.driveToggles?.bellaDrive ?? true) ? destinationBellaSocialPath : ''
+                      });
+                      setFoldersCreatedStatus('done');
+                    } catch {
+                      setFoldersCreatedStatus('idle');
+                    }
+                  }}
+                  className={`px-3.5 py-1.5 rounded text-xs font-black uppercase tracking-wider transition border disabled:opacity-50 disabled:cursor-not-allowed ${
+                    foldersCreatedStatus === 'done'
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : 'bg-slate-900 hover:bg-slate-800 text-cyan-400 border-cyan-500/20'
+                  }`}
                 >
-                  Create directory paths
+                  {foldersCreatedStatus === 'creating'
+                    ? '⏳ Creating...'
+                    : foldersCreatedStatus === 'done'
+                    ? '✓ Created'
+                    : 'Create directory paths'}
                 </button>
               </div>
 
