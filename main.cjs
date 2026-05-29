@@ -440,40 +440,36 @@ if (-not (Test-Path -LiteralPath $rawFolderPath)) {
     exit 1
 }
 Start-Process explorer.exe -ArgumentList "\`"$rawFolderPath\`""
-# Give Explorer time to open and come to foreground
-Start-Sleep -Milliseconds 2000
 
-# 4. Get the foreground window — it should be the Explorer we just opened
-Add-Type -MemberDefinition '
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
-' -Name "ForegroundHelper" -Namespace "" -ErrorAction SilentlyContinue
-
-$hwnd = [ForegroundHelper]::GetForegroundWindow()
-$className = New-Object System.Text.StringBuilder 256
-[ForegroundHelper]::GetClassName($hwnd, $className, 256) | Out-Null
-
-# Verify it is actually a File Explorer window
-if ($className.ToString() -ne "CabinetWClass") {
-    # Foreground is not Explorer — fall back to finding any CabinetWClass
-    # by enumerating windows and taking the most recently created one
-    $hwnd = 0
-    [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
-    $shell = New-Object -ComObject Shell.Application
+# 4. Find the Explorer window whose ACTUAL folder path matches the RAW path.
+# We match on Shell.Application's Document.Folder.Self.Path (a real filesystem
+# path, not a URI) so we can never latch onto an unrelated window like Documents.
+$targetPath = (Resolve-Path -LiteralPath $rawFolderPath).Path.TrimEnd('\')
+$shell = New-Object -ComObject Shell.Application
+$explorerHwnd = [IntPtr]::Zero
+$waited = 0
+while ($waited -lt 6000 -and $explorerHwnd -eq [IntPtr]::Zero) {
+    Start-Sleep -Milliseconds 400
+    $waited += 400
     foreach ($w in $shell.Windows()) {
         try {
-            $testHwnd = $w.HWND
-            if ($testHwnd -gt 0) { $hwnd = $testHwnd }
+            # Only real File Explorer windows expose a filesystem folder path
+            $winPath = $w.Document.Folder.Self.Path
+            if ($winPath -and ($winPath.TrimEnd('\') -ieq $targetPath)) {
+                $explorerHwnd = [IntPtr]$w.HWND
+                break
+            }
         } catch {}
     }
 }
 
-if ($hwnd -eq 0) {
-    Write-Error "ERROR: Could not find File Explorer window"
+if ($explorerHwnd -eq [IntPtr]::Zero) {
+    Write-Error "ERROR: Could not find File Explorer window showing $targetPath"
+    Add-Content "$env:TEMP\gopro_robot_log.txt" "ERROR: no Explorer window matched [$targetPath]"
     exit 1
 }
+Add-Content "$env:TEMP\gopro_robot_log.txt" "MATCHED Explorer hwnd=$explorerHwnd for [$targetPath]"
 
-$explorerHwnd = [IntPtr]$hwnd
 $explorerEl = [System.Windows.Automation.AutomationElement]::FromHandle($explorerHwnd)
 if ($explorerEl -eq $null) {
     Write-Error "ERROR: UIA could not attach to Explorer window"

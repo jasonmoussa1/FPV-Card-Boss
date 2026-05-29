@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "dev:electron": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && electron .\"",
-    "build:exe": "tsc --noEmit && vite build && electron-builder --win"
+    "build:exe": "tsc --noEmit && vite build && electron-builder --win && node deploy.cjs"
   },
   "build": {
     "appId": "com.fpvcardboss.app",
