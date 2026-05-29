@@ -5,8 +5,6 @@ interface ElectronBridge {
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
   };
   selectFolder(): Promise<string | null>;
-  launchGoProWorkflow(rawPath: string, stabilizedPath: string): Promise<{ success: boolean }>;
-  automateGoPro(rawPath: string, stabilizedPath: string, goproAppPath: string): Promise<{ success: boolean; message: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   calibrateRobot(): Promise<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +25,6 @@ interface ElectronBridge {
   copyToBella(localStabilizedPath: string, bellaSocialPath: string): Promise<{ success: boolean; message: string }>;
   onBellaCopyProgress(callback: (pct: number) => void): void;
   offBellaCopyProgress(): void;
-  moveExports(data: { stabilizedPath: string; robotStartTime: number }): Promise<{ success: boolean; movedFiles?: string[]; count?: number; error?: string }>;
   moveStabilizedFiles(data: { videosFolder?: string; stabilizedFolder: string; robotStartTime: number }): Promise<{ moved: number; files: string[]; totalGB?: number; success?: boolean; error?: string }>;
   copyToMediaDrive(data: { localStabilizedPath: string; mediaDrivePath: string; cardId: string }): Promise<{ success: boolean; message?: string; cardId?: string; fileCount?: number; sizeGB?: string }>;
   onMediaDriveCopyProgress(callback: (pct: number) => void): void;

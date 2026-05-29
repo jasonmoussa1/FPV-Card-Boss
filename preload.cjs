@@ -5,8 +5,6 @@ contextBridge.exposeInMainWorld('electron', {
     invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
   },
   selectFolder: () => ipcRenderer.invoke('select-folder'),
-  launchGoProWorkflow: (rawPath, stabilizedPath) => ipcRenderer.invoke('launch-gopro-workflow', rawPath, stabilizedPath),
-  automateGoPro: (rawPath, stabilizedPath, goproAppPath) => ipcRenderer.invoke('automate-gopro', rawPath, stabilizedPath, goproAppPath),
   calibrateRobot: () => ipcRenderer.invoke('calibrate-robot'),
   runGoProRobot: (coords, rawPath, stabilizedPath, goProPath, goProOutputPath) => ipcRenderer.invoke('run-gopro-robot', coords, rawPath, stabilizedPath, goProPath, goProOutputPath),
   onCopyProgress: (callback) => {
@@ -30,7 +28,6 @@ contextBridge.exposeInMainWorld('electron', {
   copyToBella: (localStabilizedPath, bellaSocialPath) => ipcRenderer.invoke('copy-to-bella', { localStabilizedPath, bellaSocialPath }),
   onBellaCopyProgress: (callback) => ipcRenderer.on('bella-copy-progress', (_event, pct) => callback(pct)),
   offBellaCopyProgress: () => ipcRenderer.removeAllListeners('bella-copy-progress'),
-  moveExports: (data) => ipcRenderer.invoke('move-exports', data),
   moveStabilizedFiles: (data) => ipcRenderer.invoke('move-stabilized-files', data),
   getCursorPos: () => ipcRenderer.invoke('get-cursor-pos'),
   copyToMediaDrive: (data) => ipcRenderer.invoke('copy-to-media-drive', data),

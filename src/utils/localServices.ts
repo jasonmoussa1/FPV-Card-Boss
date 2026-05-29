@@ -34,22 +34,6 @@ export async function openFolderInExplorer(folderPath: string): Promise<void> {
   }
 }
 
-export async function launchGoProWorkflow(rawPath: string, stabilizedPath: string): Promise<void> {
-  if (window.electron) {
-    await window.electron.launchGoProWorkflow(rawPath, stabilizedPath);
-  } else {
-    console.log('Mock: GoPro workflow launched', { rawPath, stabilizedPath });
-  }
-}
-
-export async function automateGoPro(rawPath: string, stabilizedPath: string, goproAppPath: string): Promise<{ success: boolean; message: string }> {
-  if (window.electron) {
-    return window.electron.automateGoPro(rawPath, stabilizedPath, goproAppPath);
-  }
-  console.log('Mock: GoPro automation', { rawPath, stabilizedPath, goproAppPath });
-  return { success: true, message: 'Mock automation' };
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function calibrateRobot(): Promise<any> {
   if (window.electron) {
@@ -65,14 +49,6 @@ export async function runGoProRobot(coords: any, rawPath: string, stabilizedPath
   }
   console.log('Mock: GoPro robot', { coords, rawPath, stabilizedPath, goProPath, goProOutputPath });
   return { success: true, message: 'Mock robot', robotStartTime: Date.now() };
-}
-
-export async function moveExports(stabilizedPath: string, robotStartTime: number): Promise<{ success: boolean; movedFiles?: string[]; count?: number; error?: string }> {
-  if (window.electron) {
-    return window.electron.moveExports({ stabilizedPath, robotStartTime });
-  }
-  console.log('Mock: moveExports', { stabilizedPath, robotStartTime });
-  return { success: true, movedFiles: [], count: 0 };
 }
 
 export async function selectFolder(): Promise<string | null> {

@@ -223,67 +223,6 @@ ipcMain.handle('get-cursor-pos', () => {
   return screen.getCursorScreenPoint();
 });
 
-ipcMain.handle('automate-gopro', async (_event, rawPath, stabilizedPath, goproAppPath) => {
-  try {
-    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-    // 1. Launch GoPro Player (Microsoft Store app)
-    exec('powershell -Command "Start-Process \\"shell:AppsFolder\\GoPro.GoProPlayer_1h9vz9xjm6b8c!App\\""', { shell: true }, () => {});
-
-    // 2. Wait for the app to open
-    await sleep(4000);
-
-    // 3. Put the stabilized export path on the clipboard so the user can paste into GoPro Player
-    clipboard.writeText(stabilizedPath);
-
-    // 4. Placeholder automation via PowerShell SendKeys
-    const psScript = [
-      '$wshell = New-Object -ComObject wscript.shell',
-      "$wshell.AppActivate('GoPro Player')",
-      'Start-Sleep -Milliseconds 500',
-      "$wshell.SendKeys('^a')",
-      'Start-Sleep -Milliseconds 500',
-      "$wshell.SendKeys('{TAB}')",
-      'Start-Sleep -Milliseconds 500',
-    ].join('\n');
-
-    const tmpScript = require('os').tmpdir() + '\\gopro_auto.ps1';
-    fs.writeFileSync(tmpScript, psScript, 'utf8');
-
-    await new Promise((resolve, reject) => {
-      exec(
-        `powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpScript}"`,
-        { shell: true },
-        (err) => {
-          fs.unlink(tmpScript, () => {});
-          if (err) reject(err); else resolve();
-        }
-      );
-    });
-
-    return { success: true, message: 'GoPro automation sequence started.' };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-});
-
-ipcMain.handle('launch-gopro-workflow', async (_event, rawPath, stabilizedPath) => {
-  try {
-    // 1. Put the stabilized export path on the clipboard so the user can paste into GoPro Player
-    clipboard.writeText(stabilizedPath);
-
-    // 2. Open the RAW folder so files are ready to drag in
-    await shell.openPath(rawPath);
-
-    // 3. Launch GoPro Player (Microsoft Store app — hardcoded AppID)
-    exec('powershell -Command "Start-Process \\"shell:AppsFolder\\GoPro.GoProPlayer_1h9vz9xjm6b8c!App\\""', { shell: true }, () => {});
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-});
-
 ipcMain.handle('create-folders', async (_event, paths) => {
   try {
     const { rawPath, stabilizedPath, mediaDrivePath, bellaSocialPath } = paths;
@@ -739,34 +678,6 @@ Write-Host "REMOVE_COMPLETE"
     return { success: true, message: 'Robot launched — do not touch mouse or keyboard.', robotStartTime };
   } catch (err) {
     return { success: false, message: err.message };
-  }
-});
-
-ipcMain.handle('move-exports', async (_event, { stabilizedPath, robotStartTime }) => {
-  try {
-    const videosDir = 'C:\\Users\\Jason\\Videos';
-    const entries = fs.readdirSync(videosDir);
-    const matched = entries
-      .filter(f => f.toLowerCase().endsWith('.mp4'))
-      .map(f => path.join(videosDir, f))
-      .filter(f => {
-        try { return fs.statSync(f).mtimeMs > robotStartTime; } catch { return false; }
-      });
-
-    const movedFiles = [];
-    for (const src of matched) {
-      const dest = path.join(stabilizedPath, path.basename(src));
-      try {
-        fs.renameSync(src, dest);
-      } catch {
-        fs.copyFileSync(src, dest);
-        fs.unlinkSync(src);
-      }
-      movedFiles.push(path.basename(src));
-    }
-    return { success: true, movedFiles, count: movedFiles.length };
-  } catch (err) {
-    return { success: false, error: err.message };
   }
 });
 
