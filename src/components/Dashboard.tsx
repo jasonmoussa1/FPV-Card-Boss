@@ -1049,7 +1049,7 @@ export default function Dashboard() {
       bellaSocialPath: simpleBellaEnabled ? simpleBellaPath : '',
     });
     setSimpleFolderStatus('done');
-    setTimeout(() => setSimpleFolderStatus('idle'), 3000);
+    // Stays green until the folder name changes, the card is logged, or reset.
   };
 
   const handleSimpleRunRobot = async () => {
@@ -1339,6 +1339,12 @@ export default function Dashboard() {
     const folderClean = sanitizedSimpleFolder || 'FOLDER_NAME';
     return `${root}\\${folderClean}`;
   }, [config.bellaRootPath, sanitizedSimpleFolder]);
+
+  // Simple mode: reset the green "Folders Created" confirmation when the target
+  // folder changes (i.e. the folder name is edited) so it isn't stale.
+  useEffect(() => {
+    setSimpleFolderStatus('idle');
+  }, [simpleLocalRawPath]);
 
   return (
     <div className="min-h-screen text-white flex flex-col font-sans border-none" id="fpv-boss-body">
@@ -3135,14 +3141,40 @@ export default function Dashboard() {
                     >
                       {copyProgress !== null ? `💾 COPYING SD... ${Math.round(copyProgress)}%` : '💾 COPY SD CARD'}
                     </button>
+
+                    {/* SD COPY PROGRESS BAR (matches festival) */}
+                    {copyProgress !== null && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black text-amber-500 uppercase tracking-wider block">
+                          SD CARD COPY IN PROGRESS
+                        </span>
+                        <div className="relative bg-slate-950 rounded-xl h-9 overflow-hidden">
+                          <div
+                            className="absolute inset-y-0 left-0 progress-gradient transition-all duration-300 ease-out"
+                            style={{ width: `${copyProgress}%` }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-sm font-black text-amber-400 tracking-widest">
+                            {Math.round(copyProgress)}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SD COPY VERIFICATION PANEL (matches festival) */}
                     {sdCopyResult !== null && (
                       sdCopyResult.matched ? (
-                        <div className="w-full py-2.5 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
-                          <p className="text-xs font-black text-emerald-400">✓ COPY VERIFIED — {sdCopyResult.fileCount} files / {sdCopyResult.sizeGB}</p>
+                        <div className="w-full py-2.5 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 space-y-0.5">
+                          <p className="text-xs font-black text-emerald-400 uppercase tracking-widest">✓ COPY VERIFIED</p>
+                          <p className="text-xs font-bold text-emerald-300">SD Card: {sdCopyResult.sourceFileCount} files</p>
+                          <p className="text-xs font-bold text-emerald-300">Local RAW: {sdCopyResult.fileCount} files — {sdCopyResult.sizeGB}</p>
+                          <p className="text-xs font-bold text-emerald-400">Source and destination counts match ✓</p>
                         </div>
                       ) : (
-                        <div className="w-full py-2.5 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40">
-                          <p className="text-xs font-black text-rose-400">⚠ FILE COUNT MISMATCH — SD: {sdCopyResult.sourceFileCount} vs RAW: {sdCopyResult.fileCount}</p>
+                        <div className="w-full py-2.5 px-4 rounded-xl bg-rose-500/20 border border-rose-500/40 space-y-0.5">
+                          <p className="text-xs font-black text-rose-400 uppercase tracking-widest">⚠ FILE COUNT MISMATCH</p>
+                          <p className="text-xs font-bold text-rose-300">SD Card: {sdCopyResult.sourceFileCount} files</p>
+                          <p className="text-xs font-bold text-rose-300">Local RAW: {sdCopyResult.fileCount} files — {sdCopyResult.sizeGB}</p>
+                          <p className="text-xs font-bold text-rose-400">Counts do not match. Check for copy errors before running the robot.</p>
                         </div>
                       )
                     )}
