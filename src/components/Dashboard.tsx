@@ -43,6 +43,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import ShotListPanel from './ShotListPanel';
 
 function cleanFolderName(input: string): string {
   if (!input) return "";
@@ -170,6 +171,7 @@ export default function Dashboard() {
   const [setupTab, setSetupTab] = useState<'festival' | 'simple'>('festival');
 
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
+  const [isShotListOpen, setIsShotListOpen] = useState<boolean>(false);
   const [historyPilotFilter, setHistoryPilotFilter] = useState<string>('ALL');
   const [copyProgress, setCopyProgress] = useState<number | null>(null);
   const [mediaCopyProgress, setMediaCopyProgress] = useState<number | null>(null);
@@ -416,6 +418,10 @@ export default function Dashboard() {
       if (a.daySection) days.add(a.daySection);
     });
     return Array.from(days);
+  }, [allAssignments]);
+
+  const pilots = useMemo(() => {
+    return Array.from(new Set(allAssignments.map(a => a.pilot).filter(Boolean)));
   }, [allAssignments]);
 
   useEffect(() => {
@@ -1269,6 +1275,15 @@ export default function Dashboard() {
               className="flex items-center gap-2 px-5 py-3 rounded-xl bg-rose-900 text-rose-300 hover:bg-rose-800 text-base font-black transition"
             >
               🗑 Reset Shot List
+            </button>
+          )}
+
+          {allAssignments.length > 0 && (
+            <button
+              onClick={() => setIsShotListOpen(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 text-base font-black transition"
+            >
+              📋 VIEW SHOT LIST
             </button>
           )}
 
@@ -3471,6 +3486,13 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <ShotListPanel
+        isOpen={isShotListOpen}
+        onClose={() => setIsShotListOpen(false)}
+        assignments={allAssignments}
+        pilots={pilots}
+      />
 
     </div>
   );

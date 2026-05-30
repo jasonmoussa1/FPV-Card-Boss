@@ -9,6 +9,25 @@ export interface FpvAssignment {
   assignment: string;
   flyTime: string;
   notes: string;
+  setTime?: string;
+  stage?: string;
+  dropTime?: string;
+}
+
+export type ShotStatus = 'pending' | 'completed' | 'skipped';
+
+export interface ShotListItem {
+  id: string;          // stable unique id
+  daySection: string;
+  pilot: string;
+  assignment: string;
+  setTime: string;
+  stage: string;
+  flyTime: string;
+  dropTime: string;
+  notes: string;       // editable; seeded from CSV NOTES
+  status: ShotStatus;
+  manual: boolean;     // true if added by hand in-app (not from CSV)
 }
 
 export interface PilotConfig {

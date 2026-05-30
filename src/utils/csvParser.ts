@@ -84,6 +84,9 @@ export function extractFpvAssignments(rawCsvText: string): FpvAssignment[] {
   let assigneeColIndex = -1;
   let flyTimeColIndex = -1;
   let notesColIndex = -1;
+  let setTimeColIndex = -1;
+  let stageColIndex = -1;
+  let dropTimeColIndex = -1;
 
   for (let idx = 0; idx < headerRow.length; idx++) {
     const val = headerRow[idx].trim().toUpperCase();
@@ -95,6 +98,12 @@ export function extractFpvAssignments(rawCsvText: string): FpvAssignment[] {
       flyTimeColIndex = idx;
     } else if (val === "NOTES") {
       notesColIndex = idx;
+    } else if (val === "SET TIME" || val.includes("SET TIME")) {
+      setTimeColIndex = idx;
+    } else if (val === "STAGE" || val.includes("STAGE")) {
+      stageColIndex = idx;
+    } else if (val === "DROP TIME" || val.includes("DROP TIME")) {
+      dropTimeColIndex = idx;
     }
   }
 
@@ -103,6 +112,9 @@ export function extractFpvAssignments(rawCsvText: string): FpvAssignment[] {
   if (assigneeColIndex === -1) assigneeColIndex = 3;
   if (flyTimeColIndex === -1) flyTimeColIndex = 4;
   if (notesColIndex === -1) notesColIndex = 8;
+  if (setTimeColIndex === -1) setTimeColIndex = 1;
+  if (stageColIndex === -1) stageColIndex = 2;
+  if (dropTimeColIndex === -1) dropTimeColIndex = 5;
 
   let currentDaySection = "";
 
@@ -132,6 +144,9 @@ export function extractFpvAssignments(rawCsvText: string): FpvAssignment[] {
     const assigneeVal = row[assigneeColIndex] ? row[assigneeColIndex].trim() : "";
     const flyTimeVal = row[flyTimeColIndex] ? row[flyTimeColIndex].trim() : "";
     const notesVal = row[notesColIndex] ? row[notesColIndex].trim() : "";
+    const setTimeVal = row[setTimeColIndex] ? row[setTimeColIndex].trim() : "";
+    const stageVal = row[stageColIndex] ? row[stageColIndex].trim() : "";
+    const dropTimeVal = row[dropTimeColIndex] ? row[dropTimeColIndex].trim() : "";
 
     if (!artistVal || !assigneeVal) continue;
 
@@ -152,7 +167,10 @@ export function extractFpvAssignments(rawCsvText: string): FpvAssignment[] {
       pilot: assigneeVal,
       assignment: artistVal,
       flyTime: flyTimeVal,
-      notes: notesVal
+      notes: notesVal,
+      setTime: setTimeVal,
+      stage: stageVal,
+      dropTime: dropTimeVal
     });
   }
 
