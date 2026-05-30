@@ -386,7 +386,10 @@ export default function Dashboard() {
     (async () => {
       const result = await window.electron?.loadCalibration();
       if (result && result.found) {
-        setConfig(prev => ({ ...prev, robotCoords: result.coords }));
+        // Only restore from the saved file if there is NO in-app calibration yet.
+        // The in-app calibration (localStorage) is authoritative so a stale file
+        // entry can never silently override a fresh calibration on reopen.
+        setConfig(prev => (prev.robotCoords ? prev : { ...prev, robotCoords: result.coords }));
       }
     })();
   }, []);
@@ -1513,6 +1516,9 @@ export default function Dashboard() {
                       const coords = await window.electron?.ipcRenderer.invoke('calibrate-robot');
                       if (coords) {
                         setConfig(prev => ({ ...prev, robotCoords: coords }));
+                        // Persist to the calibration file too, so the saved copy is
+                        // always the latest (keyed by machine + screen resolution).
+                        await window.electron?.saveCalibration(coords);
                       }
                     } finally {
                       setIsCalibrating(false);
@@ -1528,7 +1534,10 @@ export default function Dashboard() {
                       ✓ Calibration saved — robot is ready
                     </span>
                     <button
-                      onClick={() => setConfig(prev => ({ ...prev, robotCoords: null }))}
+                      onClick={async () => {
+                        setConfig(prev => ({ ...prev, robotCoords: null }));
+                        await window.electron?.saveCalibration(null);
+                      }}
                       className="px-3 py-2 bg-rose-950/30 hover:bg-rose-950/50 text-rose-400 text-xs font-black rounded-lg transition uppercase tracking-widest border border-rose-950/50"
                     >
                       🗑 CLEAR CALIBRATION
