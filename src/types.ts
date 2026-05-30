@@ -41,6 +41,7 @@ export interface FpvConfig {
   localRootPath: string;
   mediaRootPath: string;
   bellaRootPath: string;
+  rawDumpPath?: string;
   sdCardDrive: string;
   goProAppPath: string;
   goProOutputPath?: string;

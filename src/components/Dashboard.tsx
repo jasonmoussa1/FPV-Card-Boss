@@ -18,6 +18,9 @@ import {
   copyToMedia,
   copyToBella,
   deleteSdRawFiles,
+  dumpRaws,
+  onDumpRawsProgress,
+  offDumpRawsProgress,
   openFolderInExplorer,
   selectFolder,
   runGoProRobot,
@@ -90,6 +93,7 @@ export default function Dashboard() {
       localRootPath: 'D:',
       mediaRootPath: 'M:',
       bellaRootPath: 'S:',
+      rawDumpPath: '',
       sdCardDrive: 'E:\\',
       goProAppPath: '',
       goProOutputPath: 'C:\\Users\\Jason\\Videos',
@@ -196,6 +200,11 @@ export default function Dashboard() {
   const [sdDeleteError, setSdDeleteError] = useState<string | null>(null);
 
   const [foldersCreatedStatus, setFoldersCreatedStatus] = useState<'idle' | 'creating' | 'done'>('idle');
+
+  const [dumpRawsStatus, setDumpRawsStatus] = useState<'idle' | 'dumping' | 'success' | 'error'>('idle');
+  const [dumpRawsProgress, setDumpRawsProgress] = useState<{ current: number; total: number } | null>(null);
+  const [dumpRawsResult, setDumpRawsResult] = useState<{ copied: number; skipped: number; sizeGB: string } | null>(null);
+  const [dumpRawsError, setDumpRawsError] = useState<string | null>(null);
 
   const [preFlightStatus, setPreFlightStatus] = useState<'idle' | 'checking' | 'passed' | 'failed'>('idle');
   const [preFlightErrors, setPreFlightErrors] = useState<string[]>([]);
@@ -369,6 +378,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    onDumpRawsProgress((data) => setDumpRawsProgress({ current: data.current, total: data.total }));
+    return () => { offDumpRawsProgress(); };
+  }, []);
+
+  useEffect(() => {
     (async () => {
       const result = await window.electron?.loadCalibration();
       if (result && result.found) {
@@ -501,6 +515,13 @@ export default function Dashboard() {
   useEffect(() => {
     setFoldersCreatedStatus('idle');
   }, [localRawPath]);
+
+  // Dump Raws is per-pilot — clear its result when the selected pilot changes.
+  useEffect(() => {
+    setDumpRawsStatus('idle');
+    setDumpRawsResult(null);
+    setDumpRawsError(null);
+  }, [selectedPilot]);
 
   const destinationMediaDrivePath = useMemo(() => {
     const root = config.mediaRootPath.trim();
@@ -853,6 +874,40 @@ export default function Dashboard() {
     } catch (err: unknown) {
       setSdDeleteError(String(err));
       setSdDeleteStatus('error');
+    }
+  };
+
+  const handleDumpRaws = async () => {
+    const dumpPath = config.rawDumpPath?.trim();
+    if (!selectedPilot) {
+      setDumpRawsError('Select a pilot first.');
+      setDumpRawsStatus('error');
+      return;
+    }
+    if (!dumpPath) {
+      setDumpRawsError('Set a Raw Dump Folder in Setup first.');
+      setDumpRawsStatus('error');
+      return;
+    }
+    const pilotRootPath = `${config.localRootPath.trim()}\\${sanitizedEvent}\\${sanitizedPilot}`;
+    setDumpRawsStatus('dumping');
+    setDumpRawsError(null);
+    setDumpRawsResult(null);
+    setDumpRawsProgress(null);
+    try {
+      const result = await dumpRaws({ pilotRootPath, dumpFolderPath: dumpPath });
+      if (result?.success) {
+        setDumpRawsResult({ copied: result.copied ?? 0, skipped: result.skipped ?? 0, sizeGB: result.sizeGB ?? '0.00' });
+        setDumpRawsStatus('success');
+      } else {
+        setDumpRawsError(result?.message ?? 'Unknown error dumping raws.');
+        setDumpRawsStatus('error');
+      }
+    } catch (err: unknown) {
+      setDumpRawsError(String(err));
+      setDumpRawsStatus('error');
+    } finally {
+      setDumpRawsProgress(null);
     }
   };
 
@@ -1364,6 +1419,28 @@ export default function Dashboard() {
                     onClick={async () => {
                       const p = await selectFolder();
                       if (p) setConfig(prev => ({ ...prev, bellaRootPath: p }));
+                    }}
+                    className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl text-xs font-black whitespace-nowrap"
+                  >
+                    📁 Browse
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Raw Dump Folder</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={config.rawDumpPath ?? ''}
+                    placeholder="e.g. R:\\RAW_DUMP"
+                    onChange={e => setConfig(prev => ({ ...prev, rawDumpPath: e.target.value }))}
+                    className="bg-slate-950 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono focus:ring-2 focus:ring-amber-500 border-none flex-grow min-w-0"
+                  />
+                  <button
+                    onClick={async () => {
+                      const p = await selectFolder();
+                      if (p) setConfig(prev => ({ ...prev, rawDumpPath: p }));
                     }}
                     className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl text-xs font-black whitespace-nowrap"
                   >
@@ -2076,6 +2153,46 @@ export default function Dashboard() {
                     ? '✓ Created'
                     : 'Create directory paths'}
                 </button>
+              </div>
+
+              {/* DUMP RAWS — consolidate this pilot's raw files into the flat Raw Dump folder */}
+              <div className="space-y-1.5 pb-3 border-b border-slate-900">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                    RAW DUMP → <span className="font-mono text-slate-400">{config.rawDumpPath?.trim() || '— set in Setup —'}</span>
+                  </span>
+                  <button
+                    disabled={dumpRawsStatus === 'dumping' || !selectedPilot || !(config.rawDumpPath?.trim())}
+                    onClick={handleDumpRaws}
+                    className={`px-3.5 py-1.5 rounded text-xs font-black uppercase tracking-wider transition border disabled:opacity-40 disabled:cursor-not-allowed ${
+                      dumpRawsStatus === 'success'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                        : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border-cyan-500/20'
+                    }`}
+                  >
+                    {dumpRawsStatus === 'dumping'
+                      ? (dumpRawsProgress ? `⏳ DUMPING ${dumpRawsProgress.current}/${dumpRawsProgress.total}...` : '⏳ DUMPING...')
+                      : dumpRawsStatus === 'success'
+                      ? '✓ RAWS DUMPED — RUN AGAIN'
+                      : `⬇ DUMP RAWS (${selectedPilot || 'NO PILOT'})`}
+                  </button>
+                </div>
+                {dumpRawsStatus === 'dumping' && dumpRawsProgress && dumpRawsProgress.total > 0 && (
+                  <div className="relative bg-slate-950 rounded-xl h-7 overflow-hidden">
+                    <div className="absolute inset-y-0 left-0 progress-gradient transition-all duration-300 ease-out" style={{ width: `${(dumpRawsProgress.current / dumpRawsProgress.total) * 100}%` }} />
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-cyan-300">
+                      {dumpRawsProgress.current} / {dumpRawsProgress.total}
+                    </span>
+                  </div>
+                )}
+                {dumpRawsStatus === 'success' && dumpRawsResult && (
+                  <p className="text-[10px] font-mono text-emerald-400">
+                    Copied {dumpRawsResult.copied} new file{dumpRawsResult.copied !== 1 ? 's' : ''} ({dumpRawsResult.sizeGB} GB) · skipped {dumpRawsResult.skipped} already dumped
+                  </p>
+                )}
+                {dumpRawsStatus === 'error' && dumpRawsError && (
+                  <p className="text-[10px] font-mono text-rose-400 break-all">✗ {dumpRawsError}</p>
+                )}
               </div>
 
               <div className="space-y-4">

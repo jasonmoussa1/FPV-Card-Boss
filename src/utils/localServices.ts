@@ -59,6 +59,22 @@ export async function deleteSdRawFiles(data: { sdDrivePath: string; protectedRoo
   return { success: true, deletedCount: 0, freedGB: '0.00' };
 }
 
+export async function dumpRaws(data: { pilotRootPath: string; dumpFolderPath: string }): Promise<{ success: boolean; message?: string; copied?: number; skipped?: number; sizeGB?: string }> {
+  if (window.electron) {
+    return window.electron.dumpRaws(data);
+  }
+  console.log('Mock: dumpRaws', data);
+  return { success: true, copied: 0, skipped: 0, sizeGB: '0.00' };
+}
+
+export function onDumpRawsProgress(callback: (data: { current: number; total: number; copied: number; skipped: number }) => void): void {
+  if (window.electron) window.electron.onDumpRawsProgress(callback);
+}
+
+export function offDumpRawsProgress(): void {
+  if (window.electron) window.electron.offDumpRawsProgress();
+}
+
 export async function selectFolder(): Promise<string | null> {
   if (window.electron) {
     return window.electron.selectFolder();

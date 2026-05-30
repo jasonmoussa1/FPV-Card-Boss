@@ -1019,3 +1019,101 @@ ipcMain.handle('delete-sd-raw-files', async (_event, { sdDrivePath, protectedRoo
     return { success: false, message: err.message };
   }
 });
+
+// Copies every file found inside any RAW folder under the selected pilot's local
+// tree into ONE flat dump folder. Local RAW files are left intact (copy, not move).
+// Dedup: a source file is skipped if the dump folder already holds a file with the
+// same base name and the same size (incl. a previously-uniquified _N variant), so
+// re-running through the night only copies newly-added raws.
+ipcMain.handle('dump-raws', async (event, { pilotRootPath, dumpFolderPath }) => {
+  try {
+    const src = String(pilotRootPath || '').trim();
+    const dst = String(dumpFolderPath || '').trim();
+    if (!src) return { success: false, message: 'No pilot selected (local pilot folder is empty).' };
+    if (!dst) return { success: false, message: 'No Raw Dump Folder is set in Setup.' };
+    if (!fs.existsSync(src)) return { success: false, message: `Pilot folder not found: ${src}` };
+
+    // Collect every file that lives inside a folder named RAW (at any depth).
+    const rawFiles = [];
+    const walk = (dir, insideRaw) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full, insideRaw || entry.name.toUpperCase() === 'RAW');
+        } else if (entry.isFile() && insideRaw) {
+          rawFiles.push(full);
+        }
+      }
+    };
+    walk(src, false);
+
+    if (rawFiles.length === 0) {
+      return { success: true, copied: 0, skipped: 0, sizeGB: '0.00', message: 'No raw files found for this pilot.' };
+    }
+
+    fs.mkdirSync(dst, { recursive: true });
+
+    // Index the dump folder once: name -> size.
+    const destIndex = new Map();
+    try {
+      for (const entry of fs.readdirSync(dst, { withFileTypes: true })) {
+        if (entry.isFile()) {
+          try { destIndex.set(entry.name, fs.statSync(path.join(dst, entry.name)).size); } catch {}
+        }
+      }
+    } catch {}
+
+    const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    let copied = 0;
+    let skipped = 0;
+    let copiedBytes = 0;
+    const total = rawFiles.length;
+
+    for (let i = 0; i < rawFiles.length; i++) {
+      const srcFile = rawFiles[i];
+      let size;
+      try { size = fs.statSync(srcFile).size; } catch { continue; }
+      const ext = path.extname(srcFile);
+      const base = path.basename(srcFile, ext);
+
+      // Match dump files named base.ext or base_N.ext (same base, optional numeric suffix).
+      const variantRe = new RegExp('^' + escapeRe(base) + '(_(\\d+))?' + escapeRe(ext) + '$', 'i');
+      let alreadyDumped = false;
+      let maxSuffix = 0;
+      for (const [name, sz] of destIndex) {
+        if (variantRe.test(name)) {
+          if (sz === size) { alreadyDumped = true; break; }
+          const m = name.match(new RegExp('_(\\d+)' + escapeRe(ext) + '$', 'i'));
+          if (m) maxSuffix = Math.max(maxSuffix, parseInt(m[1], 10));
+        }
+      }
+      if (alreadyDumped) { skipped++; continue; }
+
+      // Pick a non-colliding destination name.
+      let destName = base + ext;
+      if (destIndex.has(destName)) destName = `${base}_${maxSuffix + 1}${ext}`;
+
+      try {
+        await fs.promises.copyFile(srcFile, path.join(dst, destName));
+        destIndex.set(destName, size);
+        copied++;
+        copiedBytes += size;
+      } catch (e) {
+        // skip individual file errors, keep going
+      }
+
+      try {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('dump-raws-progress', { current: i + 1, total, copied, skipped });
+        }
+      } catch {}
+    }
+
+    return { success: true, copied, skipped, sizeGB: (copiedBytes / (1024 ** 3)).toFixed(2) };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
