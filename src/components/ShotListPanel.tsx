@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { FpvAssignment, ShotListItem, ShotStatus } from '../types';
 
 const STORAGE_KEY = 'fpv_boss_shotlist';
+const PILOTS_KEY = 'fpv_boss_shotlist_pilots'; // stores UNCHECKED pilot names
 
 interface ShotListPanelProps {
   isOpen: boolean;
@@ -105,7 +106,15 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
       return [];
     }
   });
-  const [pilotFilter, setPilotFilter] = useState<string>('ALL');
+  // We store the UNCHECKED pilots so new pilots default to checked.
+  const [deselectedPilots, setDeselectedPilots] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(PILOTS_KEY);
+      return saved ? new Set<string>(JSON.parse(saved) as string[]) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
   const [dayFilter, setDayFilter] = useState<string>('ALL');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ShotListItem | null>(null);
@@ -113,6 +122,18 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
+
+  useEffect(() => {
+    localStorage.setItem(PILOTS_KEY, JSON.stringify(Array.from(deselectedPilots)));
+  }, [deselectedPilots]);
+
+  const togglePilot = (p: string) => setDeselectedPilots(prev => {
+    const next = new Set(prev);
+    if (next.has(p)) next.delete(p); else next.add(p);
+    return next;
+  });
+  const checkAllPilots = () => setDeselectedPilots(new Set());
+  const checkNonePilots = () => setDeselectedPilots(new Set(pilots));
 
   // Auto-seed on first open when nothing has been saved yet.
   useEffect(() => {
@@ -122,25 +143,32 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Only checked pilots are "in scope" — counts, day pills, the visible list and
+  // the exports all operate on this set, so you only track the pilots you chose.
+  const scopedItems = useMemo(
+    () => items.filter(it => !deselectedPilots.has(it.pilot)),
+    [items, deselectedPilots]
+  );
+
   const counts = useMemo(() => {
     let completed = 0, skipped = 0, pending = 0;
-    items.forEach(it => {
+    scopedItems.forEach(it => {
       if (it.status === 'completed') completed++;
       else if (it.status === 'skipped') skipped++;
       else pending++;
     });
-    return { completed, skipped, pending, total: items.length };
-  }, [items]);
+    return { completed, skipped, pending, total: scopedItems.length };
+  }, [scopedItems]);
 
-  // Ordered list of day sections + per-day progress (across all pilots) so a
-  // day pill can show when everything that day is finished.
+  // Ordered day sections (within scope) + per-day progress so a day pill can show
+  // when everything that day is finished.
   const days = useMemo(
-    () => Array.from(new Set(items.map(it => it.daySection || 'Unknown Day/Section'))),
-    [items]
+    () => Array.from(new Set(scopedItems.map(it => it.daySection || 'Unknown Day/Section'))),
+    [scopedItems]
   );
   const dayStats = useMemo(() => {
     const m = new Map<string, { total: number; pending: number }>();
-    items.forEach(it => {
+    scopedItems.forEach(it => {
       const d = it.daySection || 'Unknown Day/Section';
       const s = m.get(d) ?? { total: 0, pending: 0 };
       s.total++;
@@ -148,14 +176,13 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
       m.set(d, s);
     });
     return m;
-  }, [items]);
+  }, [scopedItems]);
 
   const visibleItems = useMemo(
-    () => items.filter(it =>
-      (pilotFilter === 'ALL' || it.pilot === pilotFilter) &&
-      (dayFilter === 'ALL' || (it.daySection || 'Unknown Day/Section') === dayFilter)
+    () => scopedItems.filter(it =>
+      dayFilter === 'ALL' || (it.daySection || 'Unknown Day/Section') === dayFilter
     ),
-    [items, pilotFilter, dayFilter]
+    [scopedItems, dayFilter]
   );
 
   // Group visible rows by daySection, preserving first-seen (CSV) order.
@@ -195,8 +222,26 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     cancelEdit();
   };
 
+  // Mark every in-scope, still-pending shot in a day as completed (skips kept).
+  const markDayDone = (day: string) => {
+    setItems(prev => prev.map(it =>
+      (it.daySection || 'Unknown Day/Section') === day && !deselectedPilots.has(it.pilot) && it.status === 'pending'
+        ? { ...it, status: 'completed' }
+        : it
+    ));
+  };
+  // Re-open a finished day: completed shots in scope go back to pending (skips kept).
+  const reopenDay = (day: string) => {
+    setItems(prev => prev.map(it =>
+      (it.daySection || 'Unknown Day/Section') === day && !deselectedPilots.has(it.pilot) && it.status === 'completed'
+        ? { ...it, status: 'pending' }
+        : it
+    ));
+  };
+
   const addShot = () => {
-    const pilot = pilotFilter !== 'ALL' ? pilotFilter : (pilots[0] ?? '');
+    const checked = pilots.filter(p => !deselectedPilots.has(p));
+    const pilot = checked[0] ?? pilots[0] ?? '';
     const firstDay = dayFilter !== 'ALL' ? dayFilter : (items[0]?.daySection ?? assignments[0]?.daySection ?? 'Day 1');
     const newItem: ShotListItem = {
       id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -225,7 +270,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
   const exportCSV = () => {
     const header = ['Day', 'Pilot', 'Assignment', 'Set Time', 'Stage', 'Fly Time', 'Drop Time', 'Status', 'Notes'];
     const lines = [header.map(csvEscape).join(',')];
-    items.forEach(it => {
+    scopedItems.forEach(it => {
       lines.push([it.daySection, it.pilot, it.assignment, it.setTime, it.stage, it.flyTime, it.dropTime, it.status, it.notes].map(csvEscape).join(','));
     });
     triggerDownload(lines.join('\r\n'), 'text/csv;charset=utf-8', `shotlist_${dateStr()}.csv`);
@@ -234,7 +279,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
   const exportHTML = () => {
     const pilotOrder: string[] = [];
     const byPilot = new Map<string, ShotListItem[]>();
-    items.forEach(it => {
+    scopedItems.forEach(it => {
       const p = it.pilot || '(no pilot)';
       if (!byPilot.has(p)) { byPilot.set(p, []); pilotOrder.push(p); }
       byPilot.get(p)!.push(it);
@@ -312,23 +357,19 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
   };
 
   // ── Style helpers ───────────────────────────────────────────
-  const pill = (active: boolean): string =>
-    `px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition border ${
-      active ? 'bg-amber-500 text-slate-950 border-transparent' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-    }`;
-
-  // Day pills can also show a "fully done" emerald state when nothing is pending.
+  // A completed day (nothing pending) turns RED so a finished day is unmistakable.
   const dayPill = (active: boolean, done: boolean): string =>
     `px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition border ${
       active
         ? 'bg-amber-500 text-slate-950 border-transparent'
         : done
-        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 hover:bg-rose-500/30'
         : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
     }`;
 
-  const cardClass = (status: ShotStatus): string =>
-    status === 'completed' ? 'bg-emerald-500/10 border border-emerald-500/30'
+  const cardClass = (status: ShotStatus, dayDone: boolean): string =>
+    dayDone ? 'bg-rose-500/15 border border-rose-500/40'
+    : status === 'completed' ? 'bg-emerald-500/10 border border-emerald-500/30'
     : status === 'skipped' ? 'bg-rose-500/10 border border-rose-500/30 opacity-70'
     : 'bg-slate-950 border border-amber-500/30';
 
@@ -385,13 +426,26 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
             </div>
           )}
 
-          {/* pilot filter pills */}
+          {/* pilot selection checkboxes — scopes the list AND the exports */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-12 shrink-0">Pilot</span>
-            <button onClick={() => setPilotFilter('ALL')} className={pill(pilotFilter === 'ALL')}>ALL</button>
-            {pilots.map(p => (
-              <button key={p} onClick={() => setPilotFilter(p)} className={pill(pilotFilter === p)}>{p}</button>
-            ))}
+            <button onClick={checkAllPilots} className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-800 text-slate-300 hover:bg-slate-700 transition">All</button>
+            <button onClick={checkNonePilots} className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-800 text-slate-300 hover:bg-slate-700 transition">None</button>
+            {pilots.map(p => {
+              const checked = !deselectedPilots.has(p);
+              return (
+                <button
+                  key={p}
+                  onClick={() => togglePilot(p)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition border ${
+                    checked ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-500 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <span className={`w-4 h-4 rounded flex items-center justify-center text-[10px] border ${checked ? 'bg-amber-500 text-slate-950 border-transparent' : 'border-slate-600 text-transparent'}`}>✓</span>
+                  {p}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -409,12 +463,17 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
               No shots to show. Import a CSV or use “➕ Add Shot”.
             </p>
           ) : (
-            groups.map(group => (
+            groups.map(group => {
+              const dayDone = group.rows.length > 0 && group.rows.every(r => r.status !== 'pending');
+              return (
               <div key={group.day} className="space-y-3">
-                <h3 className="text-sm font-black uppercase tracking-widest text-amber-400">{group.day}</h3>
+                <h3 className={`text-sm font-black uppercase tracking-widest ${dayDone ? 'text-rose-400' : 'text-amber-400'}`}>
+                  {group.day}
+                  {dayDone && <span className="ml-2 text-[10px] font-black bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded align-middle">✓ DAY COMPLETE</span>}
+                </h3>
 
                 {group.rows.map(it => (
-                  <div key={it.id} className={`rounded-2xl p-4 space-y-3 ${cardClass(it.status)}`}>
+                  <div key={it.id} className={`rounded-2xl p-4 space-y-3 ${cardClass(it.status, dayDone)}`}>
                     {editingId === it.id && draft ? (
                       /* ── EDIT MODE ── */
                       <div className="space-y-3">
@@ -471,7 +530,8 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
                           <div className="flex-grow min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`text-lg md:text-xl font-black tracking-wide break-words ${
-                                it.status === 'completed' ? 'line-through text-emerald-400'
+                                dayDone ? 'line-through text-rose-300'
+                                : it.status === 'completed' ? 'line-through text-emerald-400'
                                 : it.status === 'skipped' ? 'text-rose-300'
                                 : 'text-white'
                               }`}>
@@ -513,8 +573,20 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
                     )}
                   </div>
                 ))}
+
+                <button
+                  onClick={() => (dayDone ? reopenDay(group.day) : markDayDone(group.day))}
+                  className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition border ${
+                    dayDone
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                      : 'bg-slate-800 text-slate-300 border-transparent hover:bg-slate-700'
+                  }`}
+                >
+                  {dayDone ? '↩ Reopen Day' : `✓ Mark “${group.day}” Done`}
+                </button>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
