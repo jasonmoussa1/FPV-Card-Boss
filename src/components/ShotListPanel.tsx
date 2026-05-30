@@ -116,6 +116,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     }
   });
   const [dayFilter, setDayFilter] = useState<string>('ALL');
+  const [activePilot, setActivePilot] = useState<string>('ALL'); // which selected pilot is in view
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ShotListItem | null>(null);
 
@@ -143,32 +144,46 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Only checked pilots are "in scope" — counts, day pills, the visible list and
-  // the exports all operate on this set, so you only track the pilots you chose.
+  // Checked pilots are "in scope" — this is the working set used for the exports.
   const scopedItems = useMemo(
     () => items.filter(it => !deselectedPilots.has(it.pilot)),
     [items, deselectedPilots]
   );
 
+  // The checked pilots that actually have shots (used for the view toggle).
+  const scopedPilots = useMemo(
+    () => Array.from(new Set(scopedItems.map(it => it.pilot || '—'))),
+    [scopedItems]
+  );
+
+  // If the active pilot got unchecked, fall back to ALL.
+  const effectiveActive = activePilot !== 'ALL' && scopedPilots.includes(activePilot) ? activePilot : 'ALL';
+
+  // What's on screen: scope narrowed to the active pilot (the toggle).
+  const viewItems = useMemo(
+    () => (effectiveActive === 'ALL' ? scopedItems : scopedItems.filter(it => (it.pilot || '—') === effectiveActive)),
+    [scopedItems, effectiveActive]
+  );
+
+  // Summary + progress reflect what you're currently viewing.
   const counts = useMemo(() => {
     let completed = 0, skipped = 0, pending = 0;
-    scopedItems.forEach(it => {
+    viewItems.forEach(it => {
       if (it.status === 'completed') completed++;
       else if (it.status === 'skipped') skipped++;
       else pending++;
     });
-    return { completed, skipped, pending, total: scopedItems.length };
-  }, [scopedItems]);
+    return { completed, skipped, pending, total: viewItems.length };
+  }, [viewItems]);
 
-  // Ordered day sections (within scope) + per-day progress so a day pill can show
-  // when everything that day is finished.
+  // Ordered day sections (within the current view) + per-day progress.
   const days = useMemo(
-    () => Array.from(new Set(scopedItems.map(it => it.daySection || 'Unknown Day/Section'))),
-    [scopedItems]
+    () => Array.from(new Set(viewItems.map(it => it.daySection || 'Unknown Day/Section'))),
+    [viewItems]
   );
   const dayStats = useMemo(() => {
     const m = new Map<string, { total: number; pending: number }>();
-    scopedItems.forEach(it => {
+    viewItems.forEach(it => {
       const d = it.daySection || 'Unknown Day/Section';
       const s = m.get(d) ?? { total: 0, pending: 0 };
       s.total++;
@@ -176,25 +191,35 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
       m.set(d, s);
     });
     return m;
-  }, [scopedItems]);
+  }, [viewItems]);
 
   const visibleItems = useMemo(
-    () => scopedItems.filter(it =>
+    () => viewItems.filter(it =>
       dayFilter === 'ALL' || (it.daySection || 'Unknown Day/Section') === dayFilter
     ),
-    [scopedItems, dayFilter]
+    [viewItems, dayFilter]
   );
 
-  // Group visible rows by daySection, preserving first-seen (CSV) order.
-  const groups = useMemo(() => {
-    const order: string[] = [];
-    const map = new Map<string, ShotListItem[]>();
+  // Group by PILOT, then by day within each pilot, so every pilot's days are
+  // tracked completely independently of the others.
+  const pilotGroups = useMemo(() => {
+    const pilotOrder: string[] = [];
+    const byPilot = new Map<string, ShotListItem[]>();
     visibleItems.forEach(it => {
-      const day = it.daySection || 'Unknown Day/Section';
-      if (!map.has(day)) { map.set(day, []); order.push(day); }
-      map.get(day)!.push(it);
+      const p = it.pilot || '—';
+      if (!byPilot.has(p)) { byPilot.set(p, []); pilotOrder.push(p); }
+      byPilot.get(p)!.push(it);
     });
-    return order.map(day => ({ day, rows: map.get(day)! }));
+    return pilotOrder.map(p => {
+      const dayOrder: string[] = [];
+      const byDay = new Map<string, ShotListItem[]>();
+      byPilot.get(p)!.forEach(it => {
+        const d = it.daySection || 'Unknown Day/Section';
+        if (!byDay.has(d)) { byDay.set(d, []); dayOrder.push(d); }
+        byDay.get(d)!.push(it);
+      });
+      return { pilot: p, days: dayOrder.map(d => ({ day: d, rows: byDay.get(d)! })) };
+    });
   }, [visibleItems]);
 
   if (!isOpen) return null;
@@ -222,18 +247,18 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     cancelEdit();
   };
 
-  // Mark every in-scope, still-pending shot in a day as completed (skips kept).
-  const markDayDone = (day: string) => {
+  // Mark every still-pending shot for THIS pilot on THIS day completed (skips kept).
+  const markDayDone = (pilot: string, day: string) => {
     setItems(prev => prev.map(it =>
-      (it.daySection || 'Unknown Day/Section') === day && !deselectedPilots.has(it.pilot) && it.status === 'pending'
+      (it.pilot || '—') === pilot && (it.daySection || 'Unknown Day/Section') === day && it.status === 'pending'
         ? { ...it, status: 'completed' }
         : it
     ));
   };
-  // Re-open a finished day: completed shots in scope go back to pending (skips kept).
-  const reopenDay = (day: string) => {
+  // Re-open a finished pilot-day: that pilot's completed shots go back to pending.
+  const reopenDay = (pilot: string, day: string) => {
     setItems(prev => prev.map(it =>
-      (it.daySection || 'Unknown Day/Section') === day && !deselectedPilots.has(it.pilot) && it.status === 'completed'
+      (it.pilot || '—') === pilot && (it.daySection || 'Unknown Day/Section') === day && it.status === 'completed'
         ? { ...it, status: 'pending' }
         : it
     ));
@@ -241,7 +266,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
 
   const addShot = () => {
     const checked = pilots.filter(p => !deselectedPilots.has(p));
-    const pilot = checked[0] ?? pilots[0] ?? '';
+    const pilot = effectiveActive !== 'ALL' ? effectiveActive : (checked[0] ?? pilots[0] ?? '');
     const firstDay = dayFilter !== 'ALL' ? dayFilter : (items[0]?.daySection ?? assignments[0]?.daySection ?? 'Day 1');
     const newItem: ShotListItem = {
       id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -277,6 +302,16 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
   };
 
   const exportHTML = () => {
+    // Summary reflects the whole exported set (all checked pilots), not the view.
+    let eDone = 0, eSkip = 0, ePend = 0;
+    scopedItems.forEach(it => {
+      if (it.status === 'completed') eDone++;
+      else if (it.status === 'skipped') eSkip++;
+      else ePend++;
+    });
+    const eTotal = scopedItems.length;
+    const ePct = eTotal > 0 ? (eDone / eTotal) * 100 : 0;
+
     const pilotOrder: string[] = [];
     const byPilot = new Map<string, ShotListItem[]>();
     scopedItems.forEach(it => {
@@ -348,8 +383,8 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
       }
     </style></head><body>
       <h1>SHOT LIST</h1>
-      <div class="summary">${counts.completed} of ${counts.total} completed &middot; ${counts.skipped} skipped &middot; ${counts.pending} pending — generated ${htmlEscape(new Date().toLocaleString())}</div>
-      <div class="bar"><i style="width:${completedPct.toFixed(1)}%"></i></div>
+      <div class="summary">${eDone} of ${eTotal} completed &middot; ${eSkip} skipped &middot; ${ePend} pending — generated ${htmlEscape(new Date().toLocaleString())}</div>
+      <div class="bar"><i style="width:${ePct.toFixed(1)}%"></i></div>
       ${bodyHtml || '<p>No shots.</p>'}
     </body></html>`;
 
@@ -447,6 +482,23 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
               );
             })}
           </div>
+
+          {/* active-pilot toggle — switch which selected pilot you're viewing */}
+          {scopedPilots.length > 1 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-12 shrink-0">View</span>
+              <button onClick={() => setActivePilot('ALL')} className={dayPill(effectiveActive === 'ALL', false)}>ALL</button>
+              {scopedPilots.map(p => {
+                const its = scopedItems.filter(it => (it.pilot || '—') === p);
+                const pdone = its.length > 0 && its.every(r => r.status !== 'pending');
+                return (
+                  <button key={p} onClick={() => setActivePilot(p)} className={dayPill(effectiveActive === p, pdone)}>
+                    {p}{pdone ? ' ✓' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* LIST */}
@@ -458,15 +510,20 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
             ➕ Add Shot
           </button>
 
-          {groups.length === 0 ? (
+          {pilotGroups.length === 0 ? (
             <p className="text-center text-sm text-slate-500 italic py-12">
               No shots to show. Import a CSV or use “➕ Add Shot”.
             </p>
           ) : (
-            groups.map(group => {
-              const dayDone = group.rows.length > 0 && group.rows.every(r => r.status !== 'pending');
-              return (
-              <div key={group.day} className="space-y-3">
+            pilotGroups.map(pg => (
+              <div key={pg.pilot} className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                  <span className="text-base md:text-lg font-black tracking-widest text-cyan-300 uppercase">🧑‍✈️ {pg.pilot}</span>
+                </div>
+                {pg.days.map(group => {
+                  const dayDone = group.rows.length > 0 && group.rows.every(r => r.status !== 'pending');
+                  return (
+                  <div key={group.day} className="space-y-3">
                 <h3 className={`text-sm font-black uppercase tracking-widest ${dayDone ? 'text-rose-400' : 'text-amber-400'}`}>
                   {group.day}
                   {dayDone && <span className="ml-2 text-[10px] font-black bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded align-middle">✓ DAY COMPLETE</span>}
@@ -575,7 +632,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
                 ))}
 
                 <button
-                  onClick={() => (dayDone ? reopenDay(group.day) : markDayDone(group.day))}
+                  onClick={() => (dayDone ? reopenDay(pg.pilot, group.day) : markDayDone(pg.pilot, group.day))}
                   className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition border ${
                     dayDone
                       ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
@@ -585,8 +642,10 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
                   {dayDone ? '↩ Reopen Day' : `✓ Mark “${group.day}” Done`}
                 </button>
               </div>
-              );
-            })
+                  );
+                })}
+              </div>
+            ))
           )}
         </div>
       </div>
