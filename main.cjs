@@ -220,7 +220,15 @@ ipcMain.handle('select-folder', async () => {
 });
 
 ipcMain.handle('get-cursor-pos', () => {
-  return screen.getCursorScreenPoint();
+  // Capture in PHYSICAL pixels (not logical/DIP). The robot is made DPI-aware and
+  // moves the mouse in physical pixels, so storing physical coordinates makes the
+  // calibration accurate on any display scaling (100% / 125% / 150%).
+  const dip = screen.getCursorScreenPoint();
+  try {
+    return screen.dipToScreenPoint(dip);
+  } catch {
+    return dip;
+  }
 });
 
 ipcMain.handle('create-folders', async (_event, paths) => {
@@ -355,6 +363,8 @@ public class MouseRobot {
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT lpPoint);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     public const uint MOUSEEVENTF_LEFTUP   = 0x0004;
     public static void Click(int x, int y) {
@@ -371,6 +381,15 @@ public class MouseRobot {
     }
 }
 '@ -Language CSharp
+
+# Make this process DPI-aware (Per-Monitor v2, falling back to System) BEFORE any
+# WinForms / UIA / window calls. This forces SetCursorPos, MoveWindow and the UIA
+# bounding rectangles to all use PHYSICAL pixels — matching the physical-pixel
+# coordinates captured during calibration. Without this the robot lands off on
+# displays scaled to 125% / 150% (e.g. most laptops).
+$dpiOk = $false
+try { $dpiOk = [MouseRobot]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch {}
+if (-not $dpiOk) { try { [MouseRobot]::SetProcessDPIAware() | Out-Null } catch {} }
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName UIAutomationClient
@@ -677,8 +696,15 @@ public class WinAPI {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, int extra);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 }
 "@
+
+# DPI-aware so the remove-queue click uses physical pixels (matches calibration).
+$dpiOk = $false
+try { $dpiOk = [WinAPI]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch {}
+if (-not $dpiOk) { try { [WinAPI]::SetProcessDPIAware() | Out-Null } catch {} }
 
 $goProProcess = Get-Process | Where-Object { $_.MainWindowTitle -like "*GoPro*" } | Select-Object -First 1
 if ($goProProcess) {
