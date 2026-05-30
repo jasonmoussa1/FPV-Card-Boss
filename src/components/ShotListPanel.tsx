@@ -106,6 +106,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     }
   });
   const [pilotFilter, setPilotFilter] = useState<string>('ALL');
+  const [dayFilter, setDayFilter] = useState<string>('ALL');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ShotListItem | null>(null);
 
@@ -131,9 +132,30 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     return { completed, skipped, pending, total: items.length };
   }, [items]);
 
+  // Ordered list of day sections + per-day progress (across all pilots) so a
+  // day pill can show when everything that day is finished.
+  const days = useMemo(
+    () => Array.from(new Set(items.map(it => it.daySection || 'Unknown Day/Section'))),
+    [items]
+  );
+  const dayStats = useMemo(() => {
+    const m = new Map<string, { total: number; pending: number }>();
+    items.forEach(it => {
+      const d = it.daySection || 'Unknown Day/Section';
+      const s = m.get(d) ?? { total: 0, pending: 0 };
+      s.total++;
+      if (it.status === 'pending') s.pending++;
+      m.set(d, s);
+    });
+    return m;
+  }, [items]);
+
   const visibleItems = useMemo(
-    () => (pilotFilter === 'ALL' ? items : items.filter(it => it.pilot === pilotFilter)),
-    [items, pilotFilter]
+    () => items.filter(it =>
+      (pilotFilter === 'ALL' || it.pilot === pilotFilter) &&
+      (dayFilter === 'ALL' || (it.daySection || 'Unknown Day/Section') === dayFilter)
+    ),
+    [items, pilotFilter, dayFilter]
   );
 
   // Group visible rows by daySection, preserving first-seen (CSV) order.
@@ -175,7 +197,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
 
   const addShot = () => {
     const pilot = pilotFilter !== 'ALL' ? pilotFilter : (pilots[0] ?? '');
-    const firstDay = items[0]?.daySection ?? assignments[0]?.daySection ?? 'Day 1';
+    const firstDay = dayFilter !== 'ALL' ? dayFilter : (items[0]?.daySection ?? assignments[0]?.daySection ?? 'Day 1');
     const newItem: ShotListItem = {
       id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       daySection: firstDay,
@@ -295,6 +317,16 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
       active ? 'bg-amber-500 text-slate-950 border-transparent' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
     }`;
 
+  // Day pills can also show a "fully done" emerald state when nothing is pending.
+  const dayPill = (active: boolean, done: boolean): string =>
+    `px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition border ${
+      active
+        ? 'bg-amber-500 text-slate-950 border-transparent'
+        : done
+        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+        : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+    }`;
+
   const cardClass = (status: ShotStatus): string =>
     status === 'completed' ? 'bg-emerald-500/10 border border-emerald-500/30'
     : status === 'skipped' ? 'bg-rose-500/10 border border-rose-500/30 opacity-70'
@@ -336,8 +368,26 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
             <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${completedPct}%` }} />
           </div>
 
+          {/* day filter pills */}
+          {days.length > 1 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-12 shrink-0">Day</span>
+              <button onClick={() => setDayFilter('ALL')} className={dayPill(dayFilter === 'ALL', false)}>ALL</button>
+              {days.map(d => {
+                const s = dayStats.get(d);
+                const done = !!s && s.total > 0 && s.pending === 0;
+                return (
+                  <button key={d} onClick={() => setDayFilter(d)} className={dayPill(dayFilter === d, done)}>
+                    {d}{done ? ' ✓' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* pilot filter pills */}
           <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-12 shrink-0">Pilot</span>
             <button onClick={() => setPilotFilter('ALL')} className={pill(pilotFilter === 'ALL')}>ALL</button>
             {pilots.map(p => (
               <button key={p} onClick={() => setPilotFilter(p)} className={pill(pilotFilter === p)}>{p}</button>
