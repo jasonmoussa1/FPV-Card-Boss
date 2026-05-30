@@ -21,7 +21,8 @@
     "win": {
       "target": [
         "portable"
-      ]
+      ],
+      "icon": "assets/icon.ico"
     },
     "files": [
       "dist/**/*",
