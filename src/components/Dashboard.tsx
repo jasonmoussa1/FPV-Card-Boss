@@ -44,6 +44,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import ShotListPanel from './ShotListPanel';
+import HelpButton from './HelpButton';
 
 function cleanFolderName(input: string): string {
   if (!input) return "";
@@ -1271,6 +1272,7 @@ export default function Dashboard() {
             <span>Import CSV</span>
             <input type="file" accept=".csv" className="hidden" onChange={handleManualUpload} />
           </label>
+          <HelpButton id="importCsv" />
 
           {csvText.trim().length > 0 && (
             <button
@@ -1311,6 +1313,7 @@ export default function Dashboard() {
             <span>Setup</span>
             {isSetupOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </button>
+          <HelpButton id="setup" />
 
           <div className="flex items-center bg-slate-800 rounded-xl p-1 gap-1">
             <button
@@ -1371,7 +1374,7 @@ export default function Dashboard() {
             {setupTab === 'festival' && (<>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Event Name</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Event Name <HelpButton id="eventName" /></label>
                 <input
                   type="text"
                   value={config.eventName}
@@ -1381,7 +1384,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Local Working Path</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Local Working Path <HelpButton id="localPath" /></label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1409,7 +1412,7 @@ export default function Dashboard() {
                   >
                     {(config.driveToggles?.mediaDrive ?? true) ? 'ON' : 'OFF'}
                   </button>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Media Drive Root</label>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Media Drive Root <HelpButton id="mediaPath" /></label>
                 </div>
                 <div className={`flex gap-2 transition ${(config.driveToggles?.mediaDrive ?? true) ? '' : 'opacity-40 pointer-events-none'}`}>
                   <input
@@ -1438,7 +1441,7 @@ export default function Dashboard() {
                   >
                     {(config.driveToggles?.bellaDrive ?? true) ? 'ON' : 'OFF'}
                   </button>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Bella Social Path</label>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Bella Social Path <HelpButton id="bellaPath" /></label>
                 </div>
                 <div className={`flex gap-2 transition ${(config.driveToggles?.bellaDrive ?? true) ? '' : 'opacity-40 pointer-events-none'}`}>
                   <input
@@ -1482,7 +1485,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black text-amber-500 uppercase tracking-widest">SD Card Drive (Source)</label>
+                <label className="text-xs font-black text-amber-500 uppercase tracking-widest">SD Card Drive (Source) <HelpButton id="sdCard" /></label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1503,7 +1506,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">GoPro Output Folder</label>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">GoPro Output Folder <HelpButton id="goproOutput" /></label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1557,6 +1560,7 @@ export default function Dashboard() {
                 >
                   {isCalibrating ? '⏳ CALIBRATING...' : '🎯 CALIBRATE GOPRO ROBOT'}
                 </button>
+                <HelpButton id="calibrate" size="md" />
                 {config.robotCoords ? (
                   <>
                     <span className="text-xs font-black tracking-wide text-emerald-400">
@@ -1641,7 +1645,7 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Local Working Path</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Local Working Path <HelpButton id="localPath" /></label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -1666,7 +1670,7 @@ export default function Dashboard() {
                       >
                         {(config.simpleConfig.driveToggles?.mediaDrive ?? true) ? 'ON' : 'OFF'}
                       </button>
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Media Drive Root</label>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Media Drive Root <HelpButton id="mediaPath" /></label>
                     </div>
                     <div className={`flex gap-2 transition ${(config.simpleConfig.driveToggles?.mediaDrive ?? true) ? '' : 'opacity-40 pointer-events-none'}`}>
                       <input
@@ -1685,7 +1689,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-black text-amber-500 uppercase tracking-widest">SD Card Drive (Source)</label>
+                    <label className="text-xs font-black text-amber-500 uppercase tracking-widest">SD Card Drive (Source) <HelpButton id="sdCard" /></label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -1724,7 +1728,7 @@ export default function Dashboard() {
         <div className="bg-slate-900 rounded-3xl p-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6 shadow-xl" id="dropdowns-panel">
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-6 w-full md:w-auto">
             <div className="flex flex-col gap-2 flex-grow">
-              <label className="text-xs font-black text-amber-500 uppercase tracking-widest leading-none">Event Segment / Day</label>
+              <label className="text-xs font-black text-amber-500 uppercase tracking-widest leading-none">Event Segment / Day <HelpButton id="daySection" /></label>
               {daySections.length > 0 ? (
                 <select
                   value={selectedDaySection}
@@ -1759,12 +1763,15 @@ export default function Dashboard() {
               </span>
             </div>
             {pickerAssignments.length > 0 && (
-              <button
-                onClick={() => setIsPickerOpen(true)}
-                className="px-4 py-2.5 bg-slate-800 text-slate-100 hover:bg-slate-700 text-xs font-black rounded-lg transition"
-              >
-                CHOOSE FROM LIST
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsPickerOpen(true)}
+                  className="px-4 py-2.5 bg-slate-800 text-slate-100 hover:bg-slate-700 text-xs font-black rounded-lg transition"
+                >
+                  CHOOSE FROM LIST
+                </button>
+                <HelpButton id="chooseFromList" />
+              </div>
             )}
           </div>
         </div>
@@ -1799,7 +1806,7 @@ export default function Dashboard() {
 
                 {/* ZONE 1: AVAILABLE PILOTS */}
                 <div className="space-y-2 pt-3">
-                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Available Pilots</span>
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Available Pilots <HelpButton id="pilots" /></span>
                   {availablePilots.length === 0 && config.pilots.length === 0 && (
                     <span className="text-xs text-slate-600 font-mono italic">No pilots in pool — import CSV or add below</span>
                   )}
@@ -1894,7 +1901,7 @@ export default function Dashboard() {
 
                 {/* ZONE 2: ACTIVE PILOTS */}
                 <div className="border-t border-slate-800 pt-3 space-y-2">
-                  <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Pilots</span>
+                  <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Pilots <HelpButton id="activePilot" /></span>
                   <div className="flex flex-wrap gap-2">
                     {(config.pilots || []).length === 0 && (
                       <span className="text-xs text-slate-600 font-mono italic">No active pilots — activate from pool above</span>
@@ -2052,7 +2059,7 @@ export default function Dashboard() {
 
               <div className="flex flex-col items-center gap-1 max-w-4xl w-full">
                 <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest bg-cyan-400/10 px-2 py-0.5 rounded-full font-black">
-                  ARTIST / TARGET LABEL
+                  ARTIST / TARGET LABEL <HelpButton id="artistName" />
                 </span>
                 <h2 className={`${activeAssignmentName.length > 40 ? 'text-xl' : 'text-2xl'} font-black text-white tracking-tight leading-tight select-all uppercase overflow-hidden line-clamp-2`}>
                   {activeAssignmentName}
@@ -2065,7 +2072,7 @@ export default function Dashboard() {
 
                 {/* Overwrite Assignment Override Input */}
                 <div className="mt-2 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-xl bg-slate-950 p-3 rounded-2xl border border-amber-500/10">
-                  <span className="text-xs text-amber-500 font-mono uppercase font-black shrink-0 px-2">OVERRIDE ARTIST:</span>
+                  <span className="text-xs text-amber-500 font-mono uppercase font-black shrink-0 px-2">OVERRIDE ARTIST: <HelpButton id="overrideArtist" /></span>
                   <input
                     type="text"
                     value={customAssignmentOverride}
@@ -2085,7 +2092,7 @@ export default function Dashboard() {
 
                 {/* Card Notes */}
                 <div className="mt-1 flex flex-col gap-2 w-full max-w-xl">
-                  <span className="text-xs text-slate-500 font-mono uppercase font-black">CARD NOTES:</span>
+                  <span className="text-xs text-slate-500 font-mono uppercase font-black">CARD NOTES: <HelpButton id="notesInput" /></span>
                   <textarea
                     rows={2}
                     value={notesInput}
@@ -2128,7 +2135,7 @@ export default function Dashboard() {
               {/* CURRENT CARD ID control */}
               <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">CURRENT CARD ID</span>
+                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">CURRENT CARD ID <HelpButton id="cardId" /></span>
                   <span className="card-id-glow text-3xl font-black text-amber-400 font-mono tracking-tight">{currentCardId}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2156,6 +2163,8 @@ export default function Dashboard() {
                   >
                     RESET
                   </button>
+                  <HelpButton id="resetCardNumber" />
+                  <HelpButton id="cardNumber" />
                 </div>
               </div>
 
@@ -2191,6 +2200,7 @@ export default function Dashboard() {
                     ? '✓ Created'
                     : 'Create directory paths'}
                 </button>
+                <HelpButton id="createFolders" size="md" />
               </div>
 
               {/* DUMP RAWS — consolidate this pilot's raw files into the flat Raw Dump folder */}
@@ -2236,7 +2246,7 @@ export default function Dashboard() {
               <div className="space-y-4">
                 {/* LOCAL RAW */}
                 <div className="space-y-1">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">1. LOCAL RAW PATH (DRAG SOURCE TARGET)</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">1. LOCAL RAW PATH (DRAG SOURCE TARGET) <HelpButton id="rawVsStabilized" /></span>
                   <div className="flex flex-col sm:flex-row items-stretch bg-slate-900 rounded-xl overflow-hidden">
                     <div className="flex items-center justify-between sm:justify-start flex-grow">
                       <span className="bg-slate-800 font-black text-xs text-slate-500 px-4 py-2 border-r border-slate-950">RAW</span>
@@ -2270,6 +2280,7 @@ export default function Dashboard() {
                       >
                         {copyProgress !== null ? 'COPYING…' : 'SD COPY'}
                       </button>
+                      <HelpButton id="copySdToRaw" size="md" />
                     </div>
 
                     <div className="flex items-stretch shrink-0 border-t sm:border-t-0 border-slate-950 text-xs">
@@ -2542,6 +2553,10 @@ export default function Dashboard() {
                 >
                   🤖 AUTO-RUN GOPRO BATCH
                 </button>
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  <HelpButton id="goproRobot" size="md" />
+                  <HelpButton id="unGain" />
+                </div>
                 <p className="text-center text-[10px] text-rose-400 font-black leading-relaxed">
                   ⚠️ WARNING: Takes over mouse/keyboard. Do not touch your computer while running!
                 </p>
@@ -2626,6 +2641,7 @@ export default function Dashboard() {
                         >
                           {moveExportsStatus === 'moving' ? '⏳ MOVING FILES...' : '✅ MOVE FILES TO STABILIZED FOLDER'}
                         </button>
+                        <div className="flex justify-center mt-1"><HelpButton id="moveExports" size="md" /></div>
                       </>
                     )}
 
@@ -2702,6 +2718,7 @@ export default function Dashboard() {
                           ? '✓ COPIED TO MEDIA DRIVE'
                           : 'COPY TO MEDIA DRIVE'}
                       </button>
+                      <div className="flex justify-center"><HelpButton id="copyToMedia" size="md" /></div>
                       {mediaDriveCopyStatus === 'copying' && mediaDriveCopyProgress !== null && (
                         <div className="relative bg-slate-950 rounded-xl h-7 overflow-hidden">
                           <div
@@ -2742,6 +2759,7 @@ export default function Dashboard() {
                           ? '✓ COPIED TO BELLA DRIVE'
                           : 'COPY TO BELLA DRIVE'}
                       </button>
+                      <div className="flex justify-center"><HelpButton id="copyToBella" size="md" /></div>
                       {bellaDriveCopyStatus === 'copying' && bellaDriveCopyProgress !== null && (
                         <div className="relative bg-slate-950 rounded-xl h-7 overflow-hidden">
                           <div
@@ -2852,6 +2870,10 @@ export default function Dashboard() {
                     <strong className="text-white text-base">15</strong>
                   </div>
                 </div>
+                <div className="flex items-center justify-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Stabilization Settings</span>
+                  <HelpButton id="goproSettings" />
+                </div>
               </div>
               </div>
 
@@ -2869,6 +2891,7 @@ export default function Dashboard() {
             <span className="text-[10px] uppercase tracking-widest font-bold opacity-60">SOP DELY METRICS CHECKED & VERIFIED ACCURATE</span>
             <span className="flex items-center gap-2">🚀 COMPLETE CURRENT CARD & SHIFT TO NEXT</span>
           </button>
+          <div className="flex justify-center"><HelpButton id="completeCard" size="md" /></div>
 
           {/* SESSION DATABASE LOG */}
           <div className="bg-slate-900 rounded-3xl p-6 shadow-xl space-y-5">
@@ -3104,6 +3127,7 @@ export default function Dashboard() {
                     >
                       {simpleFolderStatus === 'creating' ? '⏳ CREATING...' : simpleFolderStatus === 'done' ? '✓ FOLDERS CREATED' : '📁 CREATE FOLDERS'}
                     </button>
+                    <div className="flex justify-center"><HelpButton id="createFolders" /></div>
 
                     <button
                       disabled={copyProgress !== null}
@@ -3126,6 +3150,7 @@ export default function Dashboard() {
                     >
                       {copyProgress !== null ? `💾 COPYING SD... ${Math.round(copyProgress)}%` : '💾 COPY SD CARD'}
                     </button>
+                    <div className="flex justify-center"><HelpButton id="copySdToRaw" /></div>
 
                     {/* SD COPY PROGRESS BAR (matches festival) */}
                     {copyProgress !== null && (
@@ -3178,6 +3203,7 @@ export default function Dashboard() {
                     >
                       {goProRobotStatus === 'running' ? '🤖 ROBOT RUNNING...' : '🤖 RUN GOPRO ROBOT'}
                     </button>
+                    <div className="flex justify-center"><HelpButton id="goproRobot" /></div>
 
                     {/* GoPro export tracker (inline) */}
                     {goProRobotStatus === 'running' && (
@@ -3232,6 +3258,7 @@ export default function Dashboard() {
                     >
                       {moveExportsStatus === 'moving' ? '⏳ MOVING FILES...' : moveExportsStatus === 'success' ? '✓ FILES MOVED' : '📦 MOVE FILES'}
                     </button>
+                    <div className="flex justify-center"><HelpButton id="moveExports" /></div>
 
                     {simpleMediaEnabled && (
                       <div className="space-y-1.5">
