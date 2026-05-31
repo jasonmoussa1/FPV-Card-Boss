@@ -18,12 +18,12 @@ export async function createLocalFolders(pathsObject: FolderPaths): Promise<void
   }
 }
 
-export async function copySDtoRAW(sdDriveLetter: string, targetRawPath: string): Promise<{ success: boolean; message: string; sourceFileCount?: number; fileCount?: number; sizeGB?: string; matched?: boolean }> {
+export async function copySDtoRAW(sdDriveLetter: string, targetRawPath: string): Promise<{ success: boolean; message: string; sourceFileCount?: number; fileCount?: number; sizeGB?: string; matched?: boolean; activeRawPath?: string; batchSubfolder?: string }> {
   if (window.electron) {
-    return window.electron.ipcRenderer.invoke('copy-sd-to-raw', { sdDriveLetter, targetRawPath }) as Promise<{ success: boolean; message: string; sourceFileCount?: number; fileCount?: number; sizeGB?: string; matched?: boolean }>;
+    return window.electron.ipcRenderer.invoke('copy-sd-to-raw', { sdDriveLetter, targetRawPath }) as Promise<{ success: boolean; message: string; sourceFileCount?: number; fileCount?: number; sizeGB?: string; matched?: boolean; activeRawPath?: string; batchSubfolder?: string }>;
   }
   console.log('Mock: Robocopy started', { sdDriveLetter, targetRawPath });
-  return { success: true, message: 'Mock copy', sourceFileCount: 0, fileCount: 0, sizeGB: '0.00 GB', matched: true };
+  return { success: true, message: 'Mock copy', sourceFileCount: 0, fileCount: 0, sizeGB: '0.00 GB', matched: true, activeRawPath: targetRawPath, batchSubfolder: '' };
 }
 
 export async function openFolderInExplorer(folderPath: string): Promise<void> {

@@ -212,7 +212,10 @@ export default function Dashboard() {
   const [preFlightErrors, setPreFlightErrors] = useState<string[]>([]);
   const [preFlightWarnings, setPreFlightWarnings] = useState<string[]>([]);
 
-  const [sdCopyResult, setSdCopyResult] = useState<{ sourceFileCount: number; fileCount: number; sizeGB: string; matched: boolean } | null>(null);
+  const [sdCopyResult, setSdCopyResult] = useState<{ sourceFileCount: number; fileCount: number; sizeGB: string; matched: boolean; batchSubfolder?: string } | null>(null);
+  // When the same RAW folder is reused, the SD copy lands in a BATCH_NN subfolder.
+  // The robot then stabilizes only that subfolder. Empty = use the base RAW path.
+  const [sdBatchRawPath, setSdBatchRawPath] = useState<string>('');
 
   const [duplicateCardWarning, setDuplicateCardWarning] = useState<boolean>(false);
   const [duplicateCardIntent, setDuplicateCardIntent] = useState<'robot' | 'complete' | null>(null);
@@ -694,13 +697,17 @@ export default function Dashboard() {
   };
 
   const runRobotConfirmed = async () => {
+    // The robot stabilizes the most recent SD batch (a BATCH_NN subfolder when the
+    // RAW folder was reused), falling back to the base RAW path if nothing copied.
+    const robotRawPath = sdBatchRawPath || localRawPath;
+
     // PRE-FLIGHT CHECK — runs before any existing logic
     setPreFlightStatus('checking');
     setPreFlightErrors([]);
     setPreFlightWarnings([]);
 
     const preFlightResult = await window.electron?.ipcRenderer.invoke('validate-setup', {
-      rawPath: localRawPath,
+      rawPath: robotRawPath,
       stabilizedPath: localStabilizedPath,
       mediaRootPath: config.mediaRootPath,
       bellaRootPath: config.bellaRootPath,
@@ -746,7 +753,7 @@ export default function Dashboard() {
       setGoProQueueCleared(false);
       await runGoProRobot(
         config.robotCoords,
-        localRawPath,
+        robotRawPath,
         localStabilizedPath,
         config.goProAppPath,
         config.goProOutputPath || 'C:\\Users\\Jason\\Videos'
@@ -961,7 +968,7 @@ export default function Dashboard() {
       setRobotStartTime(Date.now());
       await runGoProRobot(
         config.robotCoords,
-        simpleLocalRawPath,
+        sdBatchRawPath || simpleLocalRawPath,
         simpleLocalStabPath,
         config.goProAppPath,
         config.goProOutputPath || 'C:\\Users\\Jason\\Videos'
@@ -1233,6 +1240,13 @@ export default function Dashboard() {
   useEffect(() => {
     setSimpleFolderStatus('idle');
   }, [simpleLocalRawPath]);
+
+  // Forget the active SD batch subfolder whenever the base RAW target changes
+  // (new folder name / artist / day) or the mode switches, so the next SD copy
+  // starts fresh and the robot falls back to the base path until a copy runs.
+  useEffect(() => {
+    setSdBatchRawPath('');
+  }, [localRawPath, simpleLocalRawPath, config.mode]);
 
   return (
     <div className="min-h-screen text-white flex flex-col font-sans border-none" id="fpv-boss-body">
@@ -2244,8 +2258,9 @@ export default function Dashboard() {
                             const result = await copySDtoRAW(config.sdCardDrive, localRawPath);
                             setCopyProgress(100);
                             if (result.success && result.sourceFileCount !== undefined && result.fileCount !== undefined && result.sizeGB !== undefined && result.matched !== undefined) {
-                              setSdCopyResult({ sourceFileCount: result.sourceFileCount, fileCount: result.fileCount, sizeGB: result.sizeGB, matched: result.matched });
+                              setSdCopyResult({ sourceFileCount: result.sourceFileCount, fileCount: result.fileCount, sizeGB: result.sizeGB, matched: result.matched, batchSubfolder: result.batchSubfolder });
                             }
+                            if (result.success) setSdBatchRawPath(result.activeRawPath ?? '');
                             setTimeout(() => setCopyProgress(null), 1500);
                           } catch {
                             setCopyProgress(null);
@@ -2301,6 +2316,13 @@ export default function Dashboard() {
                       <p className="text-xs font-bold text-rose-400">Counts do not match. Check for copy errors before running GoPro robot.</p>
                     </div>
                   )
+                )}
+                {sdCopyResult?.batchSubfolder && (
+                  <div className="w-full py-2 px-4 rounded-xl bg-cyan-400/10 border border-cyan-500/20">
+                    <p className="text-[11px] font-bold text-cyan-300">
+                      ↳ Folder already had files — new card copied into subfolder <span className="font-black">{sdCopyResult.batchSubfolder}</span>. The robot will stabilize only these new files.
+                    </p>
+                  </div>
                 )}
 
                 {/* LOCAL STAB */}
@@ -3094,8 +3116,9 @@ export default function Dashboard() {
                           const result = await copySDtoRAW(config.sdCardDrive, simpleLocalRawPath);
                           setCopyProgress(100);
                           if (result.success && result.sourceFileCount !== undefined && result.fileCount !== undefined && result.sizeGB !== undefined && result.matched !== undefined) {
-                            setSdCopyResult({ sourceFileCount: result.sourceFileCount, fileCount: result.fileCount, sizeGB: result.sizeGB, matched: result.matched });
+                            setSdCopyResult({ sourceFileCount: result.sourceFileCount, fileCount: result.fileCount, sizeGB: result.sizeGB, matched: result.matched, batchSubfolder: result.batchSubfolder });
                           }
+                          if (result.success) setSdBatchRawPath(result.activeRawPath ?? '');
                           setTimeout(() => setCopyProgress(null), 1500);
                         } catch { setCopyProgress(null); }
                       }}
@@ -3139,6 +3162,13 @@ export default function Dashboard() {
                           <p className="text-xs font-bold text-rose-400">Counts do not match. Check for copy errors before running the robot.</p>
                         </div>
                       )
+                    )}
+                    {sdCopyResult?.batchSubfolder && (
+                      <div className="w-full py-2 px-4 rounded-xl bg-cyan-400/10 border border-cyan-500/20">
+                        <p className="text-[11px] font-bold text-cyan-300">
+                          ↳ Folder already had files — copied into subfolder <span className="font-black">{sdCopyResult.batchSubfolder}</span>. Only these new files will stabilize.
+                        </p>
+                      </div>
                     )}
 
                     <button

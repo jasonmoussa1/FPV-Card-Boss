@@ -944,8 +944,23 @@ ipcMain.handle('copy-sd-to-raw', async (event, { sdDriveLetter, targetRawPath })
     // Count source files BEFORE robocopy runs
     const sourceFileCount = countFilesRecursive(source);
 
+    // If the RAW folder already has files from a previous card, copy this card
+    // into a fresh BATCH_NN subfolder so the robot only ever stabilizes the NEW
+    // files (it points Explorer at this subfolder), instead of re-grabbing every
+    // already-stabilized file in the shared folder.
+    let dest = targetRawPath;
+    let batchSubfolder = '';
+    const alreadyHasFiles = fs.existsSync(targetRawPath) && countFilesRecursive(targetRawPath) > 0;
+    if (alreadyHasFiles) {
+      let n = 2;
+      while (fs.existsSync(path.join(targetRawPath, `BATCH_${String(n).padStart(2, '0')}`))) n++;
+      batchSubfolder = `BATCH_${String(n).padStart(2, '0')}`;
+      dest = path.join(targetRawPath, batchSubfolder);
+    }
+    fs.mkdirSync(dest, { recursive: true });
+
     return await new Promise((resolve, reject) => {
-      const proc = spawn('robocopy', [source, targetRawPath, '/E', '/Z', '/W:5', '/R:3'], {
+      const proc = spawn('robocopy', [source, dest, '/E', '/Z', '/W:5', '/R:3'], {
         windowsHide: true,
       });
 
@@ -965,12 +980,24 @@ ipcMain.handle('copy-sd-to-raw', async (event, { sdDriveLetter, targetRawPath })
         if (code !== null && code >= 8) {
           reject(new Error(`Robocopy failed with exit code ${code}`));
         } else {
-          const fileCount = countFilesRecursive(targetRawPath);
+          // Count only THIS batch's files (the subfolder, or the base on first copy).
+          const fileCount = countFilesRecursive(dest);
           if (fileCount === 0) {
             reject(new Error('Robocopy completed but destination folder is empty — verify SD card contents'));
           } else {
-            const sizeGB = calculateFolderSizeGB(targetRawPath);
-            resolve({ success: true, message: 'SD card copied successfully.', sourceFileCount, fileCount, sizeGB, matched: sourceFileCount === fileCount });
+            const sizeGB = calculateFolderSizeGB(dest);
+            resolve({
+              success: true,
+              message: batchSubfolder
+                ? `SD card copied into new subfolder ${batchSubfolder} (folder already had files).`
+                : 'SD card copied successfully.',
+              sourceFileCount,
+              fileCount,
+              sizeGB,
+              matched: sourceFileCount === fileCount,
+              activeRawPath: dest,
+              batchSubfolder,
+            });
           }
         }
       });
