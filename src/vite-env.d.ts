@@ -16,6 +16,15 @@ interface ElectronBridge {
   dashboardSetPort(port: number): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; error?: string }>;
   onDashboardMoveDone(callback: (data: { moved: number; files: string[]; totalGB?: number; cardId?: string }) => void): void;
   offDashboardMoveDone(): void;
+  onDashboardCommand(callback: (data: { action: 'copyMedia' | 'copyBella' | 'dumpRaws' | 'completeCard' }) => void): void;
+  offDashboardCommand(): void;
+  dashboardReportState(patch: {
+    mode?: 'festival' | 'simple';
+    mediaAvailable?: boolean; mediaState?: 'idle' | 'copying' | 'success' | 'error'; mediaDest?: string; mediaHint?: string;
+    bellaAvailable?: boolean; bellaState?: 'idle' | 'copying' | 'success' | 'error'; bellaDest?: string; bellaHint?: string;
+    dumpAvailable?: boolean; dumpState?: 'idle' | 'dumping' | 'success' | 'error'; dumpDest?: string; dumpHint?: string;
+    completeAvailable?: boolean; completeHint?: string;
+  }): Promise<{ ok: boolean }>;
   onCopyProgress(callback: (pct: number) => void): void;
   offCopyProgress(): void;
   onGoProRobotStatus(callback: (data: { success: boolean; exitCode: number; error?: string }) => void): void;

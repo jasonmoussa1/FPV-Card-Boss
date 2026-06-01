@@ -26,7 +26,36 @@ const status = {
   moveMode: 'manual',     // 'auto' | 'manual'  (default manual = existing behavior)
   lastMovedCount: 0,
   lastActivity: '',
+  // ── Per-destination delivery state (reported live by the desktop renderer) ──
+  // Lets the phone show the same end-of-flow actions as the GoPro batch player:
+  // Copy to Media Drive, Copy to Bella Drive, Dump Raws, Complete Card & Shift.
+  mode: 'festival',       // 'festival' (GoPro batch player) | 'simple'
+  mediaAvailable: false,  // media toggle on AND files moved to STABILIZED
+  mediaState: 'idle',     // 'idle' | 'copying' | 'success' | 'error'
+  mediaDest: '',
+  mediaHint: '',          // why it's disabled (shown on the phone when unavailable)
+  bellaAvailable: false,  // bella toggle on AND files moved AND artist assigned
+  bellaState: 'idle',
+  bellaDest: '',
+  bellaHint: '',
+  dumpAvailable: false,   // a pilot is selected AND a Raw Dump Folder is configured
+  dumpState: 'idle',      // 'idle' | 'dumping' | 'success' | 'error'
+  dumpDest: '',
+  dumpHint: '',
+  completeAvailable: false, // a real assignment is in the queue
+  completeHint: '',
 };
+
+// Fields the desktop renderer is allowed to push into `status` via
+// 'dashboard-report-state'. Keeps the phone's delivery buttons in lock-step with
+// the desktop without letting the renderer overwrite transport/job fields.
+const REPORTABLE_FIELDS = new Set([
+  'mode',
+  'mediaAvailable', 'mediaState', 'mediaDest', 'mediaHint',
+  'bellaAvailable', 'bellaState', 'bellaDest', 'bellaHint',
+  'dumpAvailable', 'dumpState', 'dumpDest', 'dumpHint',
+  'completeAvailable', 'completeHint',
+]);
 
 // Active job context — main keeps its OWN copy so it can move files (auto / from
 // the phone) without depending on the renderer's React state.
@@ -61,7 +90,21 @@ function broadcastStatus() {
 }
 function setStatus(patch) {
   Object.assign(status, patch);
+  // Log every status transition so we can confirm main is the single source of
+  // truth and is firing at each workflow step (visible in the app's console).
+  console.log(`[dashboard] status → state=${status.state} files=${status.fileCount}/${status.expectedCount} mode=${status.moveMode} (changed: ${Object.keys(patch).join(', ')})`);
   broadcastStatus();
+}
+
+// Forward a phone-issued delivery action to the desktop renderer, which owns the
+// active mode, the destination paths and the existing handlers (Copy to Media /
+// Bella, Dump Raws, Complete Card). Keeps ONE source of truth across desktop+phone.
+function forwardToRenderer(action) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('dashboard-command', { action }); return true; } catch {}
+  }
+  setStatus({ lastActivity: `Couldn't reach the desktop app to run "${action}" at ${nowTime()}` });
+  return false;
 }
 
 function createWindow() {
@@ -96,6 +139,8 @@ app.whenReady().then(() => {
       setStatus({ moveMode: mode, lastActivity: `Move mode set to ${mode.toUpperCase()} at ${nowTime()}` });
       saveDashboardConfig();
     },
+    // New per-destination actions are run by the desktop renderer's existing handlers.
+    onCommand: (cmd) => forwardToRenderer(cmd),
     getSnapshot: () => status,
   });
   try { dashboard.start(dashboardPort); } catch (e) { console.error('[dashboard] failed to start:', e && e.message); }
@@ -293,8 +338,9 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
             setStatus({ lastActivity: `Auto-move: moving ${files.length} files…` });
             await moveNow();
           } else if (expectedCount > 0 && files.length !== expectedCount) {
-            // Count mismatch → never auto-move; let the phone offer a manual Move.
-            setStatus({ lastActivity: `Count mismatch: ${files.length} of ${expectedCount}. Manual move required.` });
+            // Count mismatch → never auto-move; flag as error so the phone shows
+            // the problem and offers a manual "Move Files Anyway".
+            setStatus({ state: 'error', lastActivity: `Count mismatch: ${files.length} of ${expectedCount}. Manual move required.` });
           }
           return true;
         }
@@ -953,6 +999,18 @@ ipcMain.handle('dashboard-get-info', () => {
   const info = dashboard ? dashboard.getInfo() : { port: dashboardPort, running: false, urls: [] };
   return { ...info, moveMode: status.moveMode };
 });
+// The desktop renderer pushes its live delivery state (which destinations are
+// available + their copy/dump progress) so the phone's buttons mirror the desktop.
+ipcMain.handle('dashboard-report-state', (_event, patch) => {
+  if (!patch || typeof patch !== 'object') return { ok: false };
+  const clean = {};
+  for (const k of Object.keys(patch)) {
+    if (REPORTABLE_FIELDS.has(k)) clean[k] = patch[k];
+  }
+  setStatus(clean);
+  return { ok: true };
+});
+
 ipcMain.handle('dashboard-set-port', (_event, port) => {
   const p = parseInt(port, 10);
   if (!Number.isInteger(p) || p < 1 || p > 65535) return { error: 'Port must be between 1 and 65535.' };

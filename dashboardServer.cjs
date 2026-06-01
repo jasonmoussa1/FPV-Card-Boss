@@ -160,6 +160,22 @@ const PAGE = `<!DOCTYPE html>
   .move.warn{background:linear-gradient(135deg,var(--red),#c8324c);color:#fff;box-shadow:0 8px 30px rgba(255,92,124,.3);}
   .activity{font-size:12px;color:var(--muted);text-align:center;min-height:16px;}
   .hint{font-size:11px;color:rgba(255,255,255,.35);text-align:center;}
+  /* Per-destination delivery actions — mirror the GoPro batch player's end buttons */
+  .deliv{display:flex;flex-direction:column;gap:10px;}
+  .act{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:15px 16px;border:1px solid var(--line);border-radius:14px;
+    background:var(--panel);color:#fff;text-align:left;}
+  .act .t{font-size:14px;font-weight:900;letter-spacing:.5px;}
+  .act .d{font-size:10px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .act:disabled{opacity:.4;}
+  .act.media{border-color:rgba(255,176,32,.35);} .act.media .t{color:var(--amber);}
+  .act.bella{border-color:rgba(180,79,255,.35);} .act.bella .t{color:var(--purple);}
+  .act.dump{border-color:rgba(0,229,255,.30);} .act.dump .t{color:var(--cyan);}
+  .act.busy{box-shadow:0 0 0 1px var(--cyan) inset;}
+  .act.done{border-color:rgba(0,255,136,.4);} .act.done .t{color:var(--green);}
+  .act.complete{align-items:center;padding:20px;border:0;background:linear-gradient(135deg,var(--green),#00cc6a);color:#04210f;box-shadow:0 8px 30px rgba(0,255,136,.25);}
+  .act.complete .t{color:#04210f;font-size:16px;letter-spacing:1.5px;text-transform:uppercase;}
+  .act.complete:disabled{background:rgba(255,255,255,.06);color:rgba(255,255,255,.25);box-shadow:none;}
+  .bhint{font-size:11px;color:var(--amber);text-align:center;margin-top:-4px;min-height:14px;}
 </style>
 </head>
 <body>
@@ -194,6 +210,24 @@ const PAGE = `<!DOCTYPE html>
     </div>
 
     <button class="move" id="moveBtn" disabled onclick="doMove()">Move Files</button>
+    <div class="bhint" id="moveHint"></div>
+
+    <div class="label" style="margin-top:4px">Deliver To</div>
+    <div class="deliv">
+      <button class="act media" id="mediaBtn" disabled onclick="send({cmd:'copyMedia'})">
+        <span class="t" id="mediaT">Copy to Media Drive</span><span class="d" id="mediaD">RAW + STABILIZED</span>
+      </button>
+      <button class="act bella" id="bellaBtn" disabled onclick="send({cmd:'copyBella'})">
+        <span class="t" id="bellaT">Copy to Bella Drive</span><span class="d" id="bellaD">STABILIZED only</span>
+      </button>
+      <button class="act dump" id="dumpBtn" disabled onclick="send({cmd:'dumpRaws'})">
+        <span class="t" id="dumpT">Dump Raws</span><span class="d" id="dumpD">Rod dump folder</span>
+      </button>
+      <button class="act complete" id="completeBtn" disabled onclick="doComplete()">
+        <span class="t" id="completeT">🚀 Complete Card &amp; Shift to Next</span><span class="d" id="completeD"></span>
+      </button>
+    </div>
+
     <div class="activity" id="activity"></div>
     <div class="hint">Live over Wi-Fi / Tailscale · pull to refresh if disconnected</div>
   </div>
@@ -222,6 +256,21 @@ const PAGE = `<!DOCTYPE html>
     send({cmd:'move'});
   }
   function mismatch(){ return status.state==='complete' && status.expectedCount>0 && status.fileCount!==status.expectedCount; }
+  function doComplete(){
+    if(!confirm('Complete the current card and shift to the next one?')) return;
+    send({cmd:'completeCard'});
+  }
+
+  // Wire one delivery button to its reported availability + progress state.
+  // Sub-label shows WHY it's greyed out when unavailable, else the destination.
+  function renderAct(btnId, txtId, descId, available, st, dest, hint, labels){
+    var btn=el(btnId);
+    btn.disabled = !available || st==='copying' || st==='dumping';
+    btn.classList.toggle('busy', st==='copying'||st==='dumping');
+    btn.classList.toggle('done', st==='success');
+    el(txtId).textContent = labels[st] || labels.idle;
+    if(descId) el(descId).textContent = available ? (dest || '') : (hint || '');
+  }
 
   function render(){
     el('cardId').textContent = status.cardId || '—';
@@ -252,6 +301,17 @@ const PAGE = `<!DOCTYPE html>
     var warn = (st==='error' || mismatch());
     btn.classList.toggle('warn', warn);
     btn.textContent = warn ? 'Move Files Anyway' : (status.lastMovedCount>0 && st==='complete' ? 'Files Moved ('+status.lastMovedCount+')' : 'Move Files');
+    el('moveHint').textContent = canMove ? '' : (st==='running' ? 'Waiting for export to finish…' : 'Run a card on the computer to begin');
+
+    // Per-destination delivery actions (mirror the desktop GoPro batch player)
+    renderAct('mediaBtn','mediaT','mediaD', status.mediaAvailable, status.mediaState, status.mediaDest, status.mediaHint,
+      {idle:'Copy to Media Drive', copying:'Copying to Media…', success:'✓ Copied to Media Drive', error:'Media copy failed — tap to retry'});
+    renderAct('bellaBtn','bellaT','bellaD', status.bellaAvailable, status.bellaState, status.bellaDest, status.bellaHint,
+      {idle:'Copy to Bella Drive', copying:'Copying to Bella…', success:'✓ Copied to Bella Drive', error:'Bella copy failed — tap to retry'});
+    renderAct('dumpBtn','dumpT','dumpD', status.dumpAvailable, status.dumpState, status.dumpDest, status.dumpHint,
+      {idle:'Dump Raws', dumping:'Dumping raws…', success:'✓ Raws dumped', error:'Dump failed — tap to retry'});
+    el('completeBtn').disabled = !status.completeAvailable;
+    el('completeD').textContent = status.completeAvailable ? '' : (status.completeHint || '');
 
     el('activity').textContent = status.lastActivity || '';
   }
@@ -265,7 +325,7 @@ const PAGE = `<!DOCTYPE html>
 </html>`;
 
 // ── Server factory ───────────────────────────────────────────────────────────
-function createDashboard({ onMove, onSetMode, getSnapshot }) {
+function createDashboard({ onMove, onSetMode, onCommand, getSnapshot }) {
   const app = express();
   let server = null;
   let wss = null;
@@ -302,6 +362,8 @@ function createDashboard({ onMove, onSetMode, getSnapshot }) {
           Promise.resolve(onMove()).catch(() => {});
         } else if (msg && msg.cmd === 'setMode' && (msg.mode === 'auto' || msg.mode === 'manual')) {
           try { onSetMode(msg.mode); } catch {}
+        } else if (msg && (msg.cmd === 'copyMedia' || msg.cmd === 'copyBella' || msg.cmd === 'dumpRaws' || msg.cmd === 'completeCard')) {
+          try { if (onCommand) onCommand(msg.cmd); } catch {}
         }
       });
       ws.on('close', () => clients.delete(ws));

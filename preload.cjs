@@ -11,6 +11,11 @@ contextBridge.exposeInMainWorld('electron', {
   dashboardSetPort: (port) => ipcRenderer.invoke('dashboard-set-port', port),
   onDashboardMoveDone: (callback) => ipcRenderer.on('dashboard-move-done', (_event, data) => callback(data)),
   offDashboardMoveDone: () => ipcRenderer.removeAllListeners('dashboard-move-done'),
+  // Phone → desktop: forwarded delivery actions (copyMedia / copyBella / dumpRaws / completeCard)
+  onDashboardCommand: (callback) => ipcRenderer.on('dashboard-command', (_event, data) => callback(data)),
+  offDashboardCommand: () => ipcRenderer.removeAllListeners('dashboard-command'),
+  // Desktop → phone: report which delivery destinations are available + their progress
+  dashboardReportState: (patch) => ipcRenderer.invoke('dashboard-report-state', patch),
   onCopyProgress: (callback) => {
     ipcRenderer.on('robocopy-progress', (_event, pct) => callback(pct));
   },

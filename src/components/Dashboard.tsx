@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { extractFpvAssignments } from '../utils/csvParser';
 import {
   FpvConfig,
@@ -1285,6 +1285,70 @@ export default function Dashboard() {
     setSdBatchRawPath('');
   }, [localRawPath, simpleLocalRawPath, config.mode]);
 
+  // ── Mobile dashboard: remote delivery actions ──────────────────────────────
+  // The phone forwards the GoPro batch player's end-of-flow actions here; we run
+  // the SAME desktop handlers (mode-correct variant) and report availability +
+  // progress back so the phone's buttons stay in lock-step with the desktop.
+  const isSimpleMode = config.mode === 'simple';
+  // Keep the latest handlers in a ref so the once-registered listener never sees
+  // stale closures over React state / paths.
+  const dashboardActionsRef = useRef<Record<string, () => void>>({});
+  dashboardActionsRef.current = {
+    copyMedia: isSimpleMode ? handleSimpleCopyToMediaDrive : handleCopyToMediaDrive,
+    copyBella: isSimpleMode ? handleSimpleCopyToBellaDrive : handleCopyToBellaDrive,
+    dumpRaws: handleDumpRaws,
+    completeCard: handleCompleteCardConfirmed,
+  };
+
+  useEffect(() => {
+    window.electron?.onDashboardCommand(({ action }) => {
+      const fn = dashboardActionsRef.current[action];
+      if (fn) { try { fn(); } catch (e) { console.error('dashboard command failed:', action, e); } }
+    });
+    return () => { window.electron?.offDashboardCommand(); };
+  }, []);
+
+  // Mirror the desktop's button enable/disable logic + progress for the phone.
+  const moveDone = moveExportsStatus === 'success';
+  const mediaToggleOn = isSimpleMode ? simpleMediaEnabled : (config.driveToggles?.mediaDrive ?? true);
+  const bellaToggleOn = isSimpleMode ? simpleBellaEnabled : (config.driveToggles?.bellaDrive ?? true);
+  const bellaArtistOk = isSimpleMode ? !!sanitizedSimpleFolder : (!!sanitizedArtist && activeAssignmentName !== 'NO ASSIGNMENTS IN QUEUE');
+  const mediaAvailable = mediaToggleOn && moveDone;
+  const bellaAvailable = bellaToggleOn && moveDone && bellaArtistOk;
+  const dumpAvailable = !isSimpleMode && !!selectedPilot && !!config.rawDumpPath?.trim();
+  const completeAvailable = !isSimpleMode && activeAssignmentName !== 'NO ASSIGNMENTS IN QUEUE';
+  // Short reasons shown under each greyed-out button on the phone.
+  const mediaHint = mediaAvailable ? '' : (!mediaToggleOn ? 'Media Drive is turned off in Setup' : 'Move files to STABILIZED first');
+  const bellaHint = bellaAvailable ? '' : (!bellaToggleOn ? 'Bella Drive is turned off in Setup' : !moveDone ? 'Move files to STABILIZED first' : 'Assign an artist to this card first');
+  const dumpHint = dumpAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : !selectedPilot ? 'Select a pilot first' : 'Set a Raw Dump Folder in Setup');
+  const completeHint = completeAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : 'Assign a card/shot first');
+  useEffect(() => {
+    window.electron?.dashboardReportState({
+      mode: isSimpleMode ? 'simple' : 'festival',
+      mediaAvailable,
+      mediaState: mediaDriveCopyStatus,
+      mediaDest: isSimpleMode ? simpleMediaPath : destinationMediaDrivePath,
+      mediaHint,
+      bellaAvailable,
+      bellaState: bellaDriveCopyStatus,
+      bellaDest: isSimpleMode ? simpleBellaPath : destinationBellaSocialPath,
+      bellaHint,
+      // Dump Raws + Complete Card are festival (GoPro batch player) actions only.
+      dumpAvailable,
+      dumpState: dumpRawsStatus,
+      dumpDest: config.rawDumpPath?.trim() || '',
+      dumpHint,
+      completeAvailable,
+      completeHint,
+    });
+  }, [
+    isSimpleMode, mediaAvailable, bellaAvailable, dumpAvailable, completeAvailable,
+    mediaHint, bellaHint, dumpHint, completeHint,
+    mediaDriveCopyStatus, bellaDriveCopyStatus, dumpRawsStatus,
+    destinationMediaDrivePath, destinationBellaSocialPath, simpleMediaPath, simpleBellaPath,
+    config.rawDumpPath,
+  ]);
+
   return (
     <div className="min-h-screen text-white flex flex-col font-sans border-none" id="fpv-boss-body">
 
@@ -2258,40 +2322,46 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-2 border-b border-slate-900">
+              <div className="flex items-center justify-between gap-4 pb-2">
                 <span className="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
                   <Folder className="w-5 h-5 text-cyan-400" /> COPIER WORKSPACE DIRECTORIES
                 </span>
-                <button
-                  disabled={foldersCreatedStatus === 'creating'}
-                  onClick={async () => {
-                    setFoldersCreatedStatus('creating');
-                    try {
-                      await createLocalFolders({
-                        rawPath: localRawPath,
-                        stabilizedPath: localStabilizedPath,
-                        mediaDrivePath: (config.driveToggles?.mediaDrive ?? true) ? destinationMediaDrivePath : '',
-                        bellaSocialPath: (config.driveToggles?.bellaDrive ?? true) ? destinationBellaSocialPath : ''
-                      });
-                      setFoldersCreatedStatus('done');
-                    } catch {
-                      setFoldersCreatedStatus('idle');
-                    }
-                  }}
-                  className={`px-3.5 py-1.5 rounded text-xs font-black uppercase tracking-wider transition border disabled:opacity-50 disabled:cursor-not-allowed ${
-                    foldersCreatedStatus === 'done'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                      : 'bg-slate-900 hover:bg-slate-800 text-cyan-400 border-cyan-500/20'
-                  }`}
-                >
-                  {foldersCreatedStatus === 'creating'
-                    ? '⏳ Creating...'
-                    : foldersCreatedStatus === 'done'
-                    ? '✓ Created'
-                    : 'Create directory paths'}
-                </button>
                 <HelpButton id="createFolders" size="md" />
               </div>
+
+              {/* STEP 1 — prominent, hard-to-miss "create the folders" action. Green
+                  outline by default; fills solid green once the folders are created. */}
+              <button
+                disabled={foldersCreatedStatus === 'creating'}
+                onClick={async () => {
+                  setFoldersCreatedStatus('creating');
+                  try {
+                    await createLocalFolders({
+                      rawPath: localRawPath,
+                      stabilizedPath: localStabilizedPath,
+                      mediaDrivePath: (config.driveToggles?.mediaDrive ?? true) ? destinationMediaDrivePath : '',
+                      bellaSocialPath: (config.driveToggles?.bellaDrive ?? true) ? destinationBellaSocialPath : ''
+                    });
+                    setFoldersCreatedStatus('done');
+                  } catch {
+                    setFoldersCreatedStatus('idle');
+                  }
+                }}
+                className={`w-full py-4 px-6 rounded-xl text-sm font-black uppercase tracking-widest transition border-2 flex items-center justify-center gap-2 disabled:cursor-not-allowed active:scale-[.99] ${
+                  foldersCreatedStatus === 'done'
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35)]'
+                    : foldersCreatedStatus === 'creating'
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/60'
+                    : 'bg-emerald-500/5 text-emerald-400 border-emerald-500 hover:bg-emerald-500/15 shadow-[0_0_18px_rgba(16,185,129,0.25)] animate-pulse'
+                }`}
+              >
+                {foldersCreatedStatus === 'creating'
+                  ? '⏳ Creating Directories...'
+                  : foldersCreatedStatus === 'done'
+                  ? '✓ Directories Created'
+                  : '① Start Here — Create Directory Paths'}
+              </button>
+              <div className="border-b border-slate-900 pb-1" />
 
               {/* DUMP RAWS — consolidate this pilot's raw files into the flat Raw Dump folder */}
               <div className="space-y-1.5 pb-3 border-b border-slate-900">
