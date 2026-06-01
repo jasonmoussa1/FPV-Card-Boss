@@ -173,6 +173,8 @@ export default function Dashboard() {
 
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [isShotListOpen, setIsShotListOpen] = useState<boolean>(false);
+  const [dashboardInfo, setDashboardInfo] = useState<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual' } | null>(null);
+  const [dashboardPortInput, setDashboardPortInput] = useState<string>('8723');
   const [historyPilotFilter, setHistoryPilotFilter] = useState<string>('ALL');
   const [copyProgress, setCopyProgress] = useState<number | null>(null);
   const [mediaCopyProgress, setMediaCopyProgress] = useState<number | null>(null);
@@ -398,6 +400,26 @@ export default function Dashboard() {
         setConfig(prev => (prev.robotCoords ? prev : { ...prev, robotCoords: result.coords }));
       }
     })();
+  }, []);
+
+  // Mobile dashboard: load server info (port + phone URLs) once on mount.
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await window.electron?.dashboardGetInfo();
+        if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? 8723)); }
+      } catch {}
+    })();
+  }, []);
+
+  // When the phone (or auto-move) moves the files, reflect it in the desktop UI.
+  useEffect(() => {
+    window.electron?.onDashboardMoveDone((data) => {
+      setMoveExportsStatus('success');
+      setMoveExportsResult({ files: data.files ?? [], moved: data.moved ?? 0, totalGB: data.totalGB });
+      if (data.totalGB !== undefined) setSizeInput(data.totalGB.toFixed(2) + ' GB');
+    });
+    return () => { window.electron?.offDashboardMoveDone(); };
   }, []);
 
   useEffect(() => {
@@ -757,7 +779,8 @@ export default function Dashboard() {
         robotRawPath,
         localStabilizedPath,
         config.goProAppPath,
-        config.goProOutputPath || 'C:\\Users\\Jason\\Videos'
+        config.goProOutputPath || 'C:\\Users\\Jason\\Videos',
+        { cardId: currentCardId, pilotName: selectedPilot, artistName: activeAssignmentName }
       );
     } catch (err: unknown) {
       setGoProRobotStatus('error');
@@ -928,6 +951,18 @@ export default function Dashboard() {
     }
   };
 
+  const applyDashboardPort = async () => {
+    const p = parseInt(dashboardPortInput, 10);
+    if (!Number.isInteger(p) || p < 1 || p > 65535) { alert('Enter a port between 1 and 65535.'); return; }
+    try {
+      const info = await window.electron?.dashboardSetPort(p);
+      if (info?.error) { alert('Could not set dashboard port: ' + info.error); return; }
+      if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? p)); }
+    } catch (e: unknown) {
+      alert('Could not set dashboard port: ' + String(e));
+    }
+  };
+
   const resetInteractiveChecklist = () => {};
 
   const handleSimpleCreateFolders = async () => {
@@ -972,7 +1007,8 @@ export default function Dashboard() {
         sdBatchRawPath || simpleLocalRawPath,
         simpleLocalStabPath,
         config.goProAppPath,
-        config.goProOutputPath || 'C:\\Users\\Jason\\Videos'
+        config.goProOutputPath || 'C:\\Users\\Jason\\Videos',
+        { cardId: sanitizedSimpleFolder, pilotName: '', artistName: simpleFolderName }
       );
     } catch (err: unknown) {
       setGoProRobotStatus('error');
@@ -1719,6 +1755,60 @@ export default function Dashboard() {
                 )}
               </div>
             )}
+
+            {/* 📱 MOBILE DASHBOARD (PWA) — watch progress & trigger Move from a phone */}
+            <div className="space-y-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest">📱 Mobile Dashboard (PWA)</h4>
+                {dashboardInfo && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${dashboardInfo.running ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                    {dashboardInfo.running ? '● Serving' : '○ Stopped'}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                On your phone (same Wi-Fi or Tailscale), open a URL below, then “Add to Home Screen” to install it. Watch live progress and tap MOVE FILES remotely. Windows may prompt to allow network access — choose <strong className="text-slate-200">Allow</strong> (Private networks).
+              </p>
+
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Dashboard Port</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={dashboardPortInput}
+                      onChange={e => setDashboardPortInput(e.target.value)}
+                      className="bg-slate-950 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono focus:ring-2 focus:ring-amber-500 border-none w-32"
+                    />
+                    <button
+                      onClick={applyDashboardPort}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl uppercase tracking-widest transition"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 bg-slate-950 rounded-xl p-4">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Open on your phone</p>
+                {dashboardInfo && dashboardInfo.urls.length > 0 ? (
+                  dashboardInfo.urls.map((u, i) => (
+                    <div key={i} className="flex items-center gap-3 flex-wrap">
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${u.label.startsWith('Tailscale') ? 'bg-violet-500/15 text-violet-400' : 'bg-cyan-400/10 text-cyan-400'}`}>
+                        {u.label}
+                      </span>
+                      <code className="text-sm font-mono text-cyan-400 break-all select-all">{u.url}</code>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No LAN/Tailscale address detected yet — connect to Wi-Fi (or start Tailscale) and reopen Setup.</p>
+                )}
+                <p className="text-[10px] font-mono text-slate-600 mt-1">Move mode (set from the phone): <span className="text-slate-400">{dashboardInfo?.moveMode ?? '—'}</span></p>
+              </div>
+            </div>
           </div>
         )}
 

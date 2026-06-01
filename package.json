@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "dev:electron": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && electron .\"",
-    "build:exe": "tsc --noEmit && vite build && electron-builder --win && node deploy.cjs"
+    "build:server": "esbuild dashboardServer.cjs --bundle --platform=node --format=cjs --outfile=dashboardServer.bundled.cjs --external:bufferutil --external:utf-8-validate",
+    "build:exe": "tsc --noEmit && vite build && npm run build:server && electron-builder --win && node deploy.cjs"
   },
   "build": {
     "appId": "com.fpvcardboss.app",
@@ -28,17 +29,23 @@
       "dist/**/*",
       "main.cjs",
       "preload.cjs",
-      "calibration.html"
+      "calibration.html",
+      "dashboardServer.cjs",
+      "dashboardServer.bundled.cjs",
+      "assets/icon-192.png",
+      "assets/icon-512.png"
     ]
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "express": "^5.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -11,7 +11,11 @@ interface ElectronBridge {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   calibrateRobot(): Promise<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string): Promise<{ success: boolean; message: string; robotStartTime?: number }>;
+  runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string, meta?: { cardId: string; pilotName: string; artistName: string }): Promise<{ success: boolean; message: string; robotStartTime?: number }>;
+  dashboardGetInfo(): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual' }>;
+  dashboardSetPort(port: number): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; error?: string }>;
+  onDashboardMoveDone(callback: (data: { moved: number; files: string[]; totalGB?: number; cardId?: string }) => void): void;
+  offDashboardMoveDone(): void;
   onCopyProgress(callback: (pct: number) => void): void;
   offCopyProgress(): void;
   onGoProRobotStatus(callback: (data: { success: boolean; exitCode: number; error?: string }) => void): void;

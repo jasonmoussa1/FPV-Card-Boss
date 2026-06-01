@@ -2,6 +2,67 @@ const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, screen, globalSho
 const path = require('path');
 const fs = require('fs');
 const { spawn, exec } = require('child_process');
+// In production the server is bundled (express + ws inlined) so node_modules is
+// not needed in the asar; in dev we fall back to the raw source.
+let createDashboard;
+try { ({ createDashboard } = require('./dashboardServer.bundled.cjs')); }
+catch { ({ createDashboard } = require('./dashboardServer.cjs')); }
+
+// ── Live mobile dashboard: shared state ──────────────────────────────────────
+let mainWindow = null;
+let dashboard = null;
+let dashboardPort = 8723;
+
+// Status object broadcast to all connected phones.
+const status = {
+  state: 'idle',          // 'idle' | 'running' | 'complete' | 'error'
+  cardId: '',
+  pilotName: '',
+  artistName: '',
+  fileCount: 0,
+  expectedCount: 0,
+  totalSizeMB: 0,
+  countLabel: '',
+  moveMode: 'manual',     // 'auto' | 'manual'  (default manual = existing behavior)
+  lastMovedCount: 0,
+  lastActivity: '',
+};
+
+// Active job context — main keeps its OWN copy so it can move files (auto / from
+// the phone) without depending on the renderer's React state.
+let activeJob = null;     // { stabilizedFolder, videosFolder, robotStartTime, expectedCount, cardId, pilotName, artistName }
+
+function dashboardConfigPath() {
+  try { return path.join(app.getPath('userData'), 'dashboard-config.json'); } catch { return null; }
+}
+function loadDashboardConfig() {
+  try {
+    const p = dashboardConfigPath();
+    if (p && fs.existsSync(p)) {
+      const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (typeof cfg.port === 'number' && cfg.port > 0 && cfg.port < 65536) dashboardPort = cfg.port;
+      if (cfg.moveMode === 'auto' || cfg.moveMode === 'manual') status.moveMode = cfg.moveMode;
+    }
+  } catch {}
+}
+function saveDashboardConfig() {
+  try {
+    const p = dashboardConfigPath();
+    if (p) fs.writeFileSync(p, JSON.stringify({ port: dashboardPort, moveMode: status.moveMode }, null, 2), 'utf8');
+  } catch {}
+}
+
+function nowTime() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function broadcastStatus() {
+  try { if (dashboard) dashboard.broadcast(status); } catch {}
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dashboard-status', status); } catch {}
+}
+function setStatus(patch) {
+  Object.assign(status, patch);
+  broadcastStatus();
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -13,6 +74,8 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  mainWindow = win;
+  win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
 
   // In dev, load from Vite dev server; in production, load built index.html
   if (!app.isPackaged) {
@@ -23,7 +86,19 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  loadDashboardConfig();
   createWindow();
+
+  // Start the live mobile dashboard (HTTP + WebSocket PWA on the LAN / Tailscale).
+  dashboard = createDashboard({
+    onMove: () => moveNow(),
+    onSetMode: (mode) => {
+      setStatus({ moveMode: mode, lastActivity: `Move mode set to ${mode.toUpperCase()} at ${nowTime()}` });
+      saveDashboardConfig();
+    },
+    getSnapshot: () => status,
+  });
+  try { dashboard.start(dashboardPort); } catch (e) { console.error('[dashboard] failed to start:', e && e.message); }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -32,11 +107,77 @@ app.whenReady().then(() => {
   });
 });
 
+app.on('will-quit', () => {
+  try { if (dashboard) dashboard.stop(); } catch {}
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
+
+// ── Shared move logic + the dashboard's own move ─────────────────────────────
+// Moves the freshly-exported .mp4s (created at/after robotStartTime) from the
+// GoPro Videos folder into the card's STABILIZED folder. ONE implementation,
+// used by the move-stabilized-files IPC handler AND moveNow().
+function performMove({ videosFolder, stabilizedFolder, robotStartTime }) {
+  const vDir = videosFolder || 'C:\\Users\\Jason\\Videos';
+  const entries = fs.readdirSync(vDir);
+  const matched = entries
+    .filter(f => f.toLowerCase().endsWith('.mp4'))
+    .map(f => path.join(vDir, f))
+    .filter(f => { try { return fs.statSync(f).mtimeMs >= robotStartTime; } catch { return false; } });
+
+  const files = [];
+  for (const src of matched) {
+    const dest = path.join(stabilizedFolder, path.basename(src));
+    try { fs.renameSync(src, dest); }
+    catch { fs.copyFileSync(src, dest); fs.unlinkSync(src); }
+    files.push(path.basename(src));
+  }
+
+  function walkSize(dir) {
+    let total = 0;
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) total += walkSize(full);
+        else { try { total += fs.statSync(full).size; } catch {} }
+      }
+    } catch {}
+    return total;
+  }
+  const cardFolder = path.dirname(stabilizedFolder);
+  const totalGB = parseFloat((walkSize(cardFolder) / (1024 ** 3)).toFixed(2));
+  return { moved: files.length, files, totalGB };
+}
+
+// Triggered by the phone ('move' command) or by the auto-move rule.
+async function moveNow() {
+  if (!activeJob) {
+    setStatus({ lastActivity: 'Move requested, but there is no active job yet.' });
+    return { moved: 0, files: [] };
+  }
+  try {
+    const r = performMove({
+      videosFolder: activeJob.videosFolder,
+      stabilizedFolder: activeJob.stabilizedFolder,
+      robotStartTime: activeJob.robotStartTime,
+    });
+    setStatus({
+      state: 'complete',
+      lastMovedCount: r.moved || 0,
+      lastActivity: `Moved ${r.moved || 0} file(s) → STABILIZED at ${nowTime()}`,
+    });
+    // Reflect the remote/auto move on the desktop UI too.
+    try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dashboard-move-done', { ...r, cardId: activeJob.cardId }); } catch {}
+    return r;
+  } catch (err) {
+    setStatus({ state: 'error', lastActivity: 'Move failed: ' + (err && err.message) });
+    return { moved: 0, files: [], error: err && err.message };
+  }
+}
 
 function calculateFolderSizeGB(folderPath) {
   let totalBytes = 0;
@@ -116,6 +257,15 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
       });
     } catch {}
 
+    // Bridge → phone dashboard
+    setStatus({
+      state: 'running',
+      fileCount: files.length,
+      expectedCount,
+      totalSizeMB: Math.round(totalSize / 1024 / 1024),
+      countLabel,
+    });
+
     const allPresent = expectedCount > 0 ? files.length >= expectedCount : files.length > 0;
 
     if (allPresent) {
@@ -130,6 +280,22 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
               countLabel,
             });
           } catch {}
+
+          // Bridge → phone dashboard, and apply the auto-move rule.
+          setStatus({
+            state: 'complete',
+            fileCount: files.length,
+            expectedCount,
+            countLabel,
+            lastActivity: `Export complete (${countLabel}) at ${nowTime()}`,
+          });
+          if (status.moveMode === 'auto' && expectedCount > 0 && files.length === expectedCount) {
+            setStatus({ lastActivity: `Auto-move: moving ${files.length} files…` });
+            await moveNow();
+          } else if (expectedCount > 0 && files.length !== expectedCount) {
+            // Count mismatch → never auto-move; let the phone offer a manual Move.
+            setStatus({ lastActivity: `Count mismatch: ${files.length} of ${expectedCount}. Manual move required.` });
+          }
           return true;
         }
       } else {
@@ -147,6 +313,7 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
       sender.send('gopro-export-error', { error: 'Export timed out after 60 minutes' });
     }
   } catch {}
+  setStatus({ state: 'error', lastActivity: 'Export timed out after 60 minutes.' });
   return false;
 }
 
@@ -333,7 +500,7 @@ ipcMain.handle('calibrate-robot', async () => {
 });
 
 // PS script template must be unindented so PowerShell's @'...'@ closing marker lands at column 0
-ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath, goProPath, goProOutputPath) => {
+ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => {
   try {
     const outputDir = goProOutputPath || 'C:\\Users\\Jason\\Videos';
     const { tenBit, hyperSmooth, smoothnessStart, smoothnessEnd, unGain, croppingStart, croppingEnd, aspectRatioOpen, aspectRatio8x7, start, dropZone, batchList, removeQueue } = coords;
@@ -345,6 +512,29 @@ ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath,
       const rawFiles = fs.readdirSync(rawPath);
       expectedCount = rawFiles.filter(f => f.toLowerCase().endsWith('.mp4')).length;
     } catch {}
+
+    // Store main's own job context so it can move files without the renderer.
+    activeJob = {
+      stabilizedFolder: stabilizedPath,
+      videosFolder: outputDir,
+      robotStartTime,
+      expectedCount,
+      cardId: (meta && meta.cardId) || '',
+      pilotName: (meta && meta.pilotName) || '',
+      artistName: (meta && meta.artistName) || '',
+    };
+    setStatus({
+      state: 'running',
+      cardId: activeJob.cardId,
+      pilotName: activeJob.pilotName,
+      artistName: activeJob.artistName,
+      fileCount: 0,
+      expectedCount,
+      totalSizeMB: 0,
+      countLabel: expectedCount > 0 ? `0 of ${expectedCount} files` : 'starting…',
+      lastMovedCount: 0,
+      lastActivity: `Robot started for ${activeJob.cardId || 'card'} at ${nowTime()}`,
+    });
 
 const psScript = `Add-Type -TypeDefinition @'
 using System;
@@ -685,8 +875,10 @@ Click-GoPro -x ${start.x} -y ${start.y} -delayMs 1000
           exitCode: code,
           error: [stdoutOutput, stderrOutput].filter(Boolean).join('\n').trim(),
         });
+        setStatus({ state: 'error', lastActivity: `Robot failed (exit ${code}) at ${nowTime()}` });
       } else {
         event.sender.send('gopro-robot-status', { success: true, exitCode: code });
+        setStatus({ lastActivity: `Robot finished — monitoring export at ${nowTime()}` });
         const exportSuccess = await waitForExportComplete(outputDir, robotStartTime, expectedCount, event.sender);
         if (exportSuccess && removeQueue && typeof removeQueue.x === 'number' && typeof removeQueue.y === 'number' && !event.sender.isDestroyed()) {
           const removeScript = `Add-Type @"
@@ -743,45 +935,32 @@ Write-Host "REMOVE_COMPLETE"
 
 ipcMain.handle('move-stabilized-files', async (_event, { videosFolder, stabilizedFolder, robotStartTime }) => {
   try {
-    const vDir = videosFolder || 'C:\\Users\\Jason\\Videos';
-    const entries = fs.readdirSync(vDir);
-    const matched = entries
-      .filter(f => f.toLowerCase().endsWith('.mp4'))
-      .map(f => path.join(vDir, f))
-      .filter(f => {
-        try { return fs.statSync(f).mtimeMs >= robotStartTime; } catch { return false; }
-      });
-
-    const files = [];
-    for (const src of matched) {
-      const dest = path.join(stabilizedFolder, path.basename(src));
-      try {
-        fs.renameSync(src, dest);
-      } catch {
-        fs.copyFileSync(src, dest);
-        fs.unlinkSync(src);
-      }
-      files.push(path.basename(src));
-    }
-
-    function walkSize(dir) {
-      let total = 0;
-      try {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          const full = path.join(dir, entry.name);
-          if (entry.isDirectory()) total += walkSize(full);
-          else { try { total += fs.statSync(full).size; } catch {} }
-        }
-      } catch {}
-      return total;
-    }
-    const cardFolder = path.dirname(stabilizedFolder);
-    const totalBytes = walkSize(cardFolder);
-    const totalGB = parseFloat((totalBytes / (1024 ** 3)).toFixed(2));
-    return { moved: files.length, files, totalGB };
+    const r = performMove({ videosFolder, stabilizedFolder, robotStartTime });
+    // Reflect the desktop move on the phone dashboard too.
+    setStatus({
+      state: 'complete',
+      lastMovedCount: r.moved || 0,
+      lastActivity: `Moved ${r.moved || 0} file(s) → STABILIZED (desktop) at ${nowTime()}`,
+    });
+    return { moved: r.moved, files: r.files, totalGB: r.totalGB };
   } catch (err) {
     return { success: false, error: err.message };
   }
+});
+
+// ── Dashboard control IPC (desktop Setup panel) ──────────────────────────────
+ipcMain.handle('dashboard-get-info', () => {
+  const info = dashboard ? dashboard.getInfo() : { port: dashboardPort, running: false, urls: [] };
+  return { ...info, moveMode: status.moveMode };
+});
+ipcMain.handle('dashboard-set-port', (_event, port) => {
+  const p = parseInt(port, 10);
+  if (!Number.isInteger(p) || p < 1 || p > 65535) return { error: 'Port must be between 1 and 65535.' };
+  dashboardPort = p;
+  saveDashboardConfig();
+  try { if (dashboard) dashboard.start(p); } catch (e) { return { error: e && e.message }; }
+  const info = dashboard ? dashboard.getInfo() : { port: p, running: false, urls: [] };
+  return { ...info, moveMode: status.moveMode };
 });
 
 ipcMain.handle('copy-to-media', async (event, { localRawPath, localStabilizedPath, mediaDrivePath }) => {

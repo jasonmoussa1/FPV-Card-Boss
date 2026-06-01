@@ -78,6 +78,10 @@ foreach ($sz in $sizes) { $pngs[$sz] = New-CardPng $sz }
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 [System.IO.File]::WriteAllBytes((Join-Path $here 'icon_preview.png'), $pngs[256])
 
+# PWA / home-screen icons (PNG, square) for the mobile dashboard.
+[System.IO.File]::WriteAllBytes((Join-Path $here 'icon-192.png'), (New-CardPng 192))
+[System.IO.File]::WriteAllBytes((Join-Path $here 'icon-512.png'), (New-CardPng 512))
+
 # Assemble a multi-size .ico (PNG-compressed entries).
 $ms = New-Object System.IO.MemoryStream
 $bw = New-Object System.IO.BinaryWriter($ms)

@@ -43,11 +43,11 @@ export async function calibrateRobot(): Promise<any> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string): Promise<{ success: boolean; message: string; robotStartTime?: number }> {
+export async function runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string, meta?: { cardId: string; pilotName: string; artistName: string }): Promise<{ success: boolean; message: string; robotStartTime?: number }> {
   if (window.electron) {
-    return window.electron.runGoProRobot(coords, rawPath, stabilizedPath, goProPath, goProOutputPath) as Promise<{ success: boolean; message: string; robotStartTime?: number }>;
+    return window.electron.runGoProRobot(coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) as Promise<{ success: boolean; message: string; robotStartTime?: number }>;
   }
-  console.log('Mock: GoPro robot', { coords, rawPath, stabilizedPath, goProPath, goProOutputPath });
+  console.log('Mock: GoPro robot', { coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta });
   return { success: true, message: 'Mock robot', robotStartTime: Date.now() };
 }
 

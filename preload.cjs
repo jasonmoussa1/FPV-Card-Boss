@@ -6,7 +6,11 @@ contextBridge.exposeInMainWorld('electron', {
   },
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   calibrateRobot: () => ipcRenderer.invoke('calibrate-robot'),
-  runGoProRobot: (coords, rawPath, stabilizedPath, goProPath, goProOutputPath) => ipcRenderer.invoke('run-gopro-robot', coords, rawPath, stabilizedPath, goProPath, goProOutputPath),
+  runGoProRobot: (coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => ipcRenderer.invoke('run-gopro-robot', coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta),
+  dashboardGetInfo: () => ipcRenderer.invoke('dashboard-get-info'),
+  dashboardSetPort: (port) => ipcRenderer.invoke('dashboard-set-port', port),
+  onDashboardMoveDone: (callback) => ipcRenderer.on('dashboard-move-done', (_event, data) => callback(data)),
+  offDashboardMoveDone: () => ipcRenderer.removeAllListeners('dashboard-move-done'),
   onCopyProgress: (callback) => {
     ipcRenderer.on('robocopy-progress', (_event, pct) => callback(pct));
   },
