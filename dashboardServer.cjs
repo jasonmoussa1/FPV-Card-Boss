@@ -42,6 +42,14 @@ function detectUrls(port) {
   return urls;
 }
 
+// Bump this whenever the PWA page/SW changes. It is shown in the page footer and
+// returned by /state so we can confirm the phone is loading the FRESH page (not a
+// stale service-worker cache). If the phone footer shows an older stamp, its PWA
+// cache is stale → remove/re-add the app or clear site data.
+const PAGE_BUILD = 'pwa-2026-06-01-k-shotedit';
+// When this server process started — proves the phone is talking to a fresh run.
+const SERVER_STARTED = new Date().toISOString();
+
 // ── Static PWA assets (served inline; icons read from /assets) ────────────────
 const ICON_DIR = path.join(__dirname, 'assets');
 let _iconCache = {};
@@ -69,31 +77,22 @@ const MANIFEST = JSON.stringify({
   ],
 });
 
+// SELF-DESTRUCT service worker. Earlier versions cached the app shell, which led
+// to phones showing a stale screen even though the server had fresh data. Caching
+// adds nothing for a LAN-only live dashboard, so this SW now deletes every cache,
+// unregisters itself, and reloads any open clients so they get the live page. It
+// installs no fetch handler, so all requests always go straight to the network.
 const SERVICE_WORKER = `
-const SHELL = 'fpvcb-shell-v1';
-const ASSETS = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
-});
+self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  // Never cache live data / non-GET. Only the static app shell is cached.
-  if (e.request.method !== 'GET') return;
-  if (ASSETS.includes(url.pathname)) {
-    e.respondWith(
-      fetch(e.request).then((res) => {
-        const copy = res.clone();
-        caches.open(SHELL).then((c) => c.put(e.request, copy));
-        return res;
-      }).catch(() => caches.match(e.request).then((r) => r || caches.match('/')))
-    );
-  }
+  e.waitUntil((async () => {
+    // Clean up any old caches and remove ourselves. We do NOT force-navigate the
+    // open clients — doing so caused an endless reload loop on some mobile browsers
+    // (the page kept reloading before it could render or accept taps). The live
+    // page is served no-store, so it is already fresh without a forced reload.
+    try { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); } catch (err) {}
+    try { await self.registration.unregister(); } catch (err) {}
+  })());
 });
 `;
 
@@ -176,6 +175,28 @@ const PAGE = `<!DOCTYPE html>
   .act.complete .t{color:#04210f;font-size:16px;letter-spacing:1.5px;text-transform:uppercase;}
   .act.complete:disabled{background:rgba(255,255,255,.06);color:rgba(255,255,255,.25);box-shadow:none;}
   .bhint{font-size:11px;color:var(--amber);text-align:center;margin-top:-4px;min-height:14px;}
+  /* Shot list (view-only) */
+  .slbtn{width:100%;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:#fff;font-weight:900;font-size:14px;letter-spacing:1px;text-transform:uppercase;}
+  #slPanel{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:50;padding:calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 20px);}
+  #slPanel .slhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+  #slPanel .slhead h2{font-size:16px;font-weight:900;letter-spacing:2px;margin:0;}
+  .slclose{background:rgba(255,92,124,.15);color:var(--red);border:1px solid rgba(255,92,124,.3);border-radius:10px;padding:9px 16px;font-weight:800;font-size:13px;}
+  .slsel{flex:1;min-width:0;padding:12px;border-radius:12px;background:#11131a;color:#fff;border:1px solid var(--line);font-weight:700;font-size:14px;}
+  .slitem{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:8px;}
+  .slitem .a{font-size:15px;font-weight:900;line-height:1.25;}
+  .slitem .m{font-size:11px;color:var(--muted);margin-top:4px;font-family:ui-monospace,Menlo,monospace;word-break:break-word;}
+  .slitem.done{border-color:rgba(0,255,136,.4);} .slitem.done .a{color:var(--green);text-decoration:line-through;}
+  .slitem.skip{border-color:rgba(255,92,124,.35);opacity:.78;} .slitem.skip .a{color:var(--red);}
+  .slbadge{display:inline-block;font-size:9px;font-weight:900;padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:1px;margin-left:6px;vertical-align:middle;}
+  .slday{font-size:11px;font-weight:900;color:var(--amber);text-transform:uppercase;letter-spacing:2px;margin:18px 0 2px;}
+  .slactions{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap;}
+  .slact{flex:1;min-width:72px;padding:10px 8px;border-radius:10px;border:1px solid var(--line);background:#11131a;color:#fff;font-weight:800;font-size:12px;}
+  .slact.done.on{background:rgba(0,255,136,.18);color:var(--green);border-color:rgba(0,255,136,.45);}
+  .slact.skip.on{background:rgba(255,92,124,.18);color:var(--red);border-color:rgba(255,92,124,.45);}
+  .slact.save{background:var(--green);color:#04210f;border:0;}
+  .slact.del{flex:0 0 auto;min-width:0;background:rgba(255,92,124,.15);color:var(--red);}
+  .sled{display:block;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:8px;flex:1;}
+  .sled input,.sled textarea{width:100%;margin-top:4px;padding:10px;border-radius:10px;background:#11131a;color:#fff;border:1px solid var(--line);font-size:14px;font-weight:600;font-family:inherit;}
 </style>
 </head>
 <body>
@@ -193,6 +214,8 @@ const PAGE = `<!DOCTYPE html>
         <div class="kv"><div class="label">Artist</div><div class="v" id="artist">—</div></div>
       </div>
     </div>
+
+    <button class="slbtn" onclick="openShotList()">📋 View Shot List</button>
 
     <div class="state idle" id="stateBox">
       <div class="label">Status</div>
@@ -230,32 +253,85 @@ const PAGE = `<!DOCTYPE html>
 
     <div class="activity" id="activity"></div>
     <div class="hint">Live over Wi-Fi / Tailscale · pull to refresh if disconnected</div>
+
+  <!-- SHOT LIST (view-only) overlay -->
+  <div id="slPanel">
+    <div class="slhead">
+      <h2>📋 SHOT LIST</h2>
+      <button class="slclose" onclick="closeShotList()">✕ Close</button>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <select id="slPilot" class="slsel" onchange="renderShotlist()"></select>
+      <select id="slDay" class="slsel" onchange="renderShotlist()"></select>
+    </div>
+    <div class="sub" id="slSummary" style="margin-top:10px"></div>
+    <div id="slList"></div>
+  </div>
+    <div class="hint" id="dbg">connecting…</div>
+    <div class="hint" id="dbgErr" style="color:var(--red)"></div>
+    <div class="hint" id="buildStamp">build ${PAGE_BUILD}</div>
   </div>
 
 <script>
-  var ws=null, retry=null, status={};
+  // NOTE: do NOT name this 'status' — window.status is a built-in that coerces any
+  // assigned value to a string, so 'status = {...}' silently became "[object Object]"
+  // and every field read back undefined (rendered as '—'). That was the root cause.
+  var ws=null, retry=null, appStatus={}, lastOk=0, lastSrc='—';
   function el(id){return document.getElementById(id);}
   function fmtMB(mb){ if(!mb) return '0 MB'; if(mb>=1024) return (mb/1024).toFixed(2)+' GB'; return mb+' MB'; }
 
+  function setConn(on){ if(on){ el('dot').classList.add('on'); el('connTxt').textContent='Live'; } else { el('dot').classList.remove('on'); el('connTxt').textContent='Offline'; } }
+  var lastRenderErr='';
+  function applyStatus(s, src){ appStatus=s||{}; lastOk=Date.now(); lastSrc=src; setConn(true); try{ render(); lastRenderErr=''; el('dbgErr').textContent=''; }catch(e){ lastRenderErr=String(e&&e.message||e); el('dbgErr').textContent='render error: '+lastRenderErr; } }
+  function setDbg(){ var ago = lastOk? Math.round((Date.now()-lastOk)/1000)+'s ago':'never'; el('dbg').textContent='data via '+lastSrc+' · updated '+ago; }
+
+  // ── Remote debug: report what the phone actually sees back to the PC so it can
+  // be read from the desktop (throttled). ──
+  var lastClog=0;
+  function clog(obj){ try{ var now=Date.now(); if(now-lastClog<2500 && obj.ev==='poll') return; lastClog=now; fetch('/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)}).catch(function(){}); }catch(e){} }
+
+  // ── PRIMARY data path: poll /state over plain HTTP. This is the path that works
+  // on this network even when WebSocket frames don't arrive on the phone. ──
+  function poll(){
+    fetch('/state',{cache:'no-store'}).then(function(r){ return r.text().then(function(t){ return {ok:r.ok, st:r.status, t:t}; }); })
+      .then(function(resp){
+        var d;
+        try{ d=JSON.parse(resp.t); }catch(e){ clog({ev:'parsefail', httpStatus:resp.st, rawlen:resp.t.length, raw:resp.t.slice(0,300)}); return; }
+        applyStatus(d.status,'http');
+        var ce=document.getElementById('cardId'), pe=document.getElementById('pilot');
+        clog({ev:'poll', httpStatus:resp.st, dataCard:(d.status&&d.status.cardId)||'(none)', domCard: ce?ce.textContent:'NO_EL', domPilot: pe?pe.textContent:'NO_EL', nCardEls:document.querySelectorAll('#cardId').length, renderErr:lastRenderErr, vis:document.visibilityState});
+      })
+      .catch(function(e){ clog({ev:'fetchfail', msg:String(e&&e.message||e)}); if(Date.now()-lastOk>5000) setConn(false); });
+  }
+
+  // ── Optional accelerator: WebSocket for instant pushes. Not required — if it
+  // never delivers messages, polling keeps everything live. ──
   function connect(){
     try{ if(ws){ws.close();} }catch(e){}
-    var proto = location.protocol==='https:'?'wss':'ws';
-    ws = new WebSocket(proto+'://'+location.host+'/');
-    ws.onopen=function(){ el('dot').classList.add('on'); el('connTxt').textContent='Live'; };
-    ws.onclose=function(){ el('dot').classList.remove('on'); el('connTxt').textContent='Offline'; scheduleRetry(); };
-    ws.onerror=function(){ try{ws.close();}catch(e){} };
-    ws.onmessage=function(ev){ try{ var m=JSON.parse(ev.data); if(m.type==='status'){ status=m.status||{}; render(); } }catch(e){} };
+    try{
+      var proto = location.protocol==='https:'?'wss':'ws';
+      ws = new WebSocket(proto+'://'+location.host+'/');
+      ws.onopen=function(){ lastOk=Date.now(); setConn(true); };
+      ws.onclose=function(){ scheduleRetry(); };
+      ws.onerror=function(){ try{ws.close();}catch(e){} };
+      ws.onmessage=function(ev){ try{ var m=JSON.parse(ev.data); if(m.type==='status'){ applyStatus(m.status,'ws'); } }catch(e){} };
+    }catch(e){}
   }
-  function scheduleRetry(){ if(retry) return; retry=setTimeout(function(){ retry=null; connect(); },2000); }
+  function scheduleRetry(){ if(retry) return; retry=setTimeout(function(){ retry=null; connect(); },4000); }
 
-  function send(obj){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify(obj)); }catch(e){} }
+  // ── Commands: POST over HTTP so buttons work even without a usable WebSocket. ──
+  function send(obj){
+    fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)})
+      .then(function(){ setTimeout(poll,150); })
+      .catch(function(){});
+  }
   function setMode(mode){ send({cmd:'setMode',mode:mode}); }
   function doMove(){
-    var s=status.state;
+    var s=appStatus.state;
     if(s==='error' || mismatch()){ if(!confirm('File count looks off or the export errored. Move the files anyway?')) return; }
     send({cmd:'move'});
   }
-  function mismatch(){ return status.state==='complete' && status.expectedCount>0 && status.fileCount!==status.expectedCount; }
+  function mismatch(){ return appStatus.state==='complete' && appStatus.expectedCount>0 && appStatus.fileCount!==appStatus.expectedCount; }
   function doComplete(){
     if(!confirm('Complete the current card and shift to the next one?')) return;
     send({cmd:'completeCard'});
@@ -273,26 +349,26 @@ const PAGE = `<!DOCTYPE html>
   }
 
   function render(){
-    el('cardId').textContent = status.cardId || '—';
-    el('pilot').textContent  = status.pilotName || '—';
-    el('artist').textContent = status.artistName || '—';
+    el('cardId').textContent = appStatus.cardId || '—';
+    el('pilot').textContent  = appStatus.pilotName || '—';
+    el('artist').textContent = appStatus.artistName || '—';
 
-    var st = status.state || 'idle';
+    var st = appStatus.state || 'idle';
     var box = el('stateBox');
     box.className = 'state '+st;
     var label = {idle:'IDLE',running:'RUNNING',complete:'COMPLETE',error:'ERROR'}[st]||st.toUpperCase();
     if(mismatch()) label='CHECK COUNT';
     el('stateTxt').textContent = label;
 
-    var fc=status.fileCount||0, ec=status.expectedCount||0;
+    var fc=appStatus.fileCount||0, ec=appStatus.expectedCount||0;
     var pct = ec>0 ? Math.min(100, Math.round(fc/ec*100)) : (st==='complete'?100:(st==='running'?6:0));
     el('barFill').style.width = pct+'%';
-    var cl = status.countLabel || (ec>0? (fc+' of '+ec+' files') : (fc?fc+' file(s)':'—'));
-    el('progress').textContent = cl + ' · ' + fmtMB(status.totalSizeMB||0);
+    var cl = appStatus.countLabel || (ec>0? (fc+' of '+ec+' files') : (fc?fc+' file(s)':'—'));
+    el('progress').textContent = cl + ' · ' + fmtMB(appStatus.totalSizeMB||0);
 
     // Mode toggle
-    el('mAuto').classList.toggle('active', status.moveMode==='auto');
-    el('mManual').classList.toggle('active', status.moveMode!=='auto');
+    el('mAuto').classList.toggle('active', appStatus.moveMode==='auto');
+    el('mManual').classList.toggle('active', appStatus.moveMode!=='auto');
 
     // Move button: enabled when complete or on error/mismatch (with confirm)
     var btn=el('moveBtn');
@@ -300,45 +376,198 @@ const PAGE = `<!DOCTYPE html>
     btn.disabled = !canMove;
     var warn = (st==='error' || mismatch());
     btn.classList.toggle('warn', warn);
-    btn.textContent = warn ? 'Move Files Anyway' : (status.lastMovedCount>0 && st==='complete' ? 'Files Moved ('+status.lastMovedCount+')' : 'Move Files');
+    btn.textContent = warn ? 'Move Files Anyway' : (appStatus.lastMovedCount>0 && st==='complete' ? 'Files Moved ('+appStatus.lastMovedCount+')' : 'Move Files');
     el('moveHint').textContent = canMove ? '' : (st==='running' ? 'Waiting for export to finish…' : 'Run a card on the computer to begin');
 
     // Per-destination delivery actions (mirror the desktop GoPro batch player)
-    renderAct('mediaBtn','mediaT','mediaD', status.mediaAvailable, status.mediaState, status.mediaDest, status.mediaHint,
+    renderAct('mediaBtn','mediaT','mediaD', appStatus.mediaAvailable, appStatus.mediaState, appStatus.mediaDest, appStatus.mediaHint,
       {idle:'Copy to Media Drive', copying:'Copying to Media…', success:'✓ Copied to Media Drive', error:'Media copy failed — tap to retry'});
-    renderAct('bellaBtn','bellaT','bellaD', status.bellaAvailable, status.bellaState, status.bellaDest, status.bellaHint,
+    renderAct('bellaBtn','bellaT','bellaD', appStatus.bellaAvailable, appStatus.bellaState, appStatus.bellaDest, appStatus.bellaHint,
       {idle:'Copy to Bella Drive', copying:'Copying to Bella…', success:'✓ Copied to Bella Drive', error:'Bella copy failed — tap to retry'});
-    renderAct('dumpBtn','dumpT','dumpD', status.dumpAvailable, status.dumpState, status.dumpDest, status.dumpHint,
+    renderAct('dumpBtn','dumpT','dumpD', appStatus.dumpAvailable, appStatus.dumpState, appStatus.dumpDest, appStatus.dumpHint,
       {idle:'Dump Raws', dumping:'Dumping raws…', success:'✓ Raws dumped', error:'Dump failed — tap to retry'});
-    el('completeBtn').disabled = !status.completeAvailable;
-    el('completeD').textContent = status.completeAvailable ? '' : (status.completeHint || '');
+    el('completeBtn').disabled = !appStatus.completeAvailable;
+    el('completeD').textContent = appStatus.completeAvailable ? '' : (appStatus.completeHint || '');
 
-    el('activity').textContent = status.lastActivity || '';
+    el('activity').textContent = appStatus.lastActivity || '';
   }
 
+  // ── SHOT LIST (interactive): fetch /shotlist, filter by pilot + day, edit & sync ──
+  var shotItems=[], slEditId=null;
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escA(s){ return esc(s).replace(/"/g,'&quot;'); }
+  function slFind(id){ for(var i=0;i<shotItems.length;i++){ if(shotItems[i].id===id) return shotItems[i]; } return null; }
+  function openShotList(){ el('slPanel').style.display='block'; loadShotlist(); }
+  function closeShotList(){ el('slPanel').style.display='none'; slEditId=null; }
+  function loadShotlist(){
+    if(!shotItems.length) el('slList').innerHTML='<p class="sub" style="margin-top:12px">Loading…</p>';
+    fetch('/shotlist',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+      shotItems=(d&&d.items)||[];
+      populateShotFilters();
+      renderShotlist();
+    }).catch(function(){ el('slList').innerHTML='<p class="sub" style="margin-top:12px">Couldn\\'t load the shot list. Make sure a CSV is loaded on the computer.</p>'; });
+  }
+  function populateShotFilters(){
+    var pilots=[], days=[];
+    shotItems.forEach(function(it){ if(it.pilot&&pilots.indexOf(it.pilot)<0)pilots.push(it.pilot); var dd=it.daySection||'—'; if(days.indexOf(dd)<0)days.push(dd); });
+    var ps=el('slPilot'), ds=el('slDay'); var pv=ps.value, dv=ds.value;
+    ps.innerHTML='<option value="ALL">All pilots</option>'+pilots.map(function(p){return '<option value="'+escA(p)+'">'+esc(p)+'</option>';}).join('');
+    ds.innerHTML='<option value="ALL">All days</option>'+days.map(function(dd){return '<option value="'+escA(dd)+'">'+esc(dd)+'</option>';}).join('');
+    if(pv) ps.value=pv; if(dv) ds.value=dv;
+  }
+
+  // Send an edit to the desktop (which owns the data + re-reports it).
+  function slCmd(id, body){ body.id=id; fetch('/shotlist-cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(function(){}); }
+  function slApply(id, patch){ shotItems=shotItems.map(function(it){ return it.id===id?Object.assign({},it,patch):it; }); }
+  function slReconcile(){ if(el('slPanel').style.display!=='none' && slEditId===null) setTimeout(loadShotlist, 800); }
+  function slToggleDone(id){ var it=slFind(id); if(!it)return; var ns=it.status==='completed'?'pending':'completed'; slApply(id,{status:ns}); slCmd(id,{patch:{status:ns}}); renderShotlist(); slReconcile(); }
+  function slToggleSkip(id){ var it=slFind(id); if(!it)return; var ns=it.status==='skipped'?'pending':'skipped'; slApply(id,{status:ns}); slCmd(id,{patch:{status:ns}}); renderShotlist(); slReconcile(); }
+  function slStartEdit(id){ slEditId=id; renderShotlist(); }
+  function slCancelEdit(){ slEditId=null; renderShotlist(); }
+  function slSaveEdit(id){
+    var g=function(f){ var e=document.getElementById('sle_'+f); return e?e.value:''; };
+    var patch={ assignment:g('assignment'), pilot:g('pilot'), daySection:g('daySection'), stage:g('stage'), setTime:g('setTime'), flyTime:g('flyTime'), dropTime:g('dropTime'), notes:g('notes') };
+    slApply(id,patch); slCmd(id,{patch:patch}); slEditId=null; populateShotFilters(); renderShotlist(); slReconcile();
+  }
+  function slDeleteItem(id){ if(!confirm('Delete this shot? This also removes it on the computer.')) return; shotItems=shotItems.filter(function(it){return it.id!==id;}); slCmd(id,{action:'delete'}); slEditId=null; renderShotlist(); }
+
+  function slEditForm(it){
+    var fld=function(label,field,val){ return '<label class="sled">'+label+'<input id="sle_'+field+'" value="'+escA(val||'')+'"></label>'; };
+    return '<div class="slitem" style="border-color:rgba(0,229,255,.45)">'
+      + fld('Assignment','assignment',it.assignment)
+      + fld('Pilot','pilot',it.pilot)
+      + fld('Day / Section','daySection',it.daySection)
+      + fld('Stage','stage',it.stage)
+      + '<div style="display:flex;gap:6px">'+fld('Set','setTime',it.setTime)+fld('Fly','flyTime',it.flyTime)+fld('Drop','dropTime',it.dropTime)+'</div>'
+      + '<label class="sled">Notes<textarea id="sle_notes" rows="2">'+esc(it.notes||'')+'</textarea></label>'
+      + '<div class="slactions">'
+        + '<button class="slact save" data-act="save" data-id="'+escA(it.id)+'">✓ Save</button>'
+        + '<button class="slact" data-act="cancel" data-id="'+escA(it.id)+'">Cancel</button>'
+        + '<button class="slact del" data-act="delete" data-id="'+escA(it.id)+'">🗑</button>'
+      + '</div></div>';
+  }
+
+  function renderShotlist(){
+    var p=el('slPilot').value||'ALL', dsel=el('slDay').value||'ALL';
+    var rows=shotItems.filter(function(it){ return (p==='ALL'||it.pilot===p) && (dsel==='ALL'||(it.daySection||'—')===dsel); });
+    var done=0,skip=0; rows.forEach(function(r){ if(r.status==='completed')done++; else if(r.status==='skipped')skip++; });
+    el('slSummary').textContent = rows.length+' shots · '+done+' done · '+skip+' skipped · '+(rows.length-done-skip)+' pending';
+    var html='', curDay=null;
+    rows.forEach(function(it){
+      var day=it.daySection||'—';
+      if(day!==curDay){ curDay=day; html+='<div class="slday">'+esc(day)+'</div>'; }
+      if(it.id===slEditId){ html+=slEditForm(it); return; }
+      var cls=it.status==='completed'?'slitem done':it.status==='skipped'?'slitem skip':'slitem';
+      var badge=it.status==='completed'?'<span class="slbadge" style="background:rgba(0,255,136,.15);color:var(--green)">✓ done</span>':it.status==='skipped'?'<span class="slbadge" style="background:rgba(255,92,124,.2);color:var(--red)">skipped</span>':'<span class="slbadge" style="background:rgba(255,255,255,.08);color:var(--muted)">pending</span>';
+      var meta=[it.stage, it.setTime&&('Set '+it.setTime), it.flyTime&&('Fly '+it.flyTime), it.dropTime&&('Drop '+it.dropTime)].filter(Boolean).map(esc).join(' · ');
+      html+='<div class="'+cls+'"><div class="a">'+esc(it.assignment||'(unnamed shot)')+badge+'</div>';
+      if(meta) html+='<div class="m">'+meta+'</div>';
+      if(p==='ALL') html+='<div class="m">🧑‍✈️ '+esc(it.pilot||'—')+'</div>';
+      if(it.notes) html+='<div class="m">📝 '+esc(it.notes)+'</div>';
+      html+='<div class="slactions">'
+        + '<button class="slact done'+(it.status==='completed'?' on':'')+'" data-act="done" data-id="'+escA(it.id)+'">'+(it.status==='completed'?'✓ Done':'Mark Done')+'</button>'
+        + '<button class="slact skip'+(it.status==='skipped'?' on':'')+'" data-act="skip" data-id="'+escA(it.id)+'">'+(it.status==='skipped'?'Skipped':'Skip')+'</button>'
+        + '<button class="slact" data-act="edit" data-id="'+escA(it.id)+'">✏️ Edit</button>'
+      + '</div>';
+      html+='</div>';
+    });
+    el('slList').innerHTML = html || '<p class="sub" style="margin-top:12px">No shots for this selection.</p>';
+  }
+
+  // One delegated click handler for all shot-list buttons (ids may contain quotes).
+  function slListClick(e){
+    var btn = e.target.closest ? e.target.closest('[data-act]') : null;
+    if(!btn) return;
+    var id=btn.getAttribute('data-id'), act=btn.getAttribute('data-act');
+    if(act==='done') slToggleDone(id);
+    else if(act==='skip') slToggleSkip(id);
+    else if(act==='edit') slStartEdit(id);
+    else if(act==='save') slSaveEdit(id);
+    else if(act==='cancel') slCancelEdit();
+    else if(act==='delete') slDeleteItem(id);
+  }
+
+  // Start polling immediately + on an interval; try the WS accelerator too.
+  el('slList').addEventListener('click', slListClick);
+  clog({ev:'load', href:location.href, host:location.host, proto:location.protocol, ua:(navigator.userAgent||'').slice(0,120)});
+  poll();
+  setInterval(poll, 1500);
+  setInterval(setDbg, 1000);
   connect();
-  // Reconnect when the phone wakes / returns to the app
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden && (!ws||ws.readyState!==1)) connect(); });
-  if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }
+  // Re-poll / reconnect when the phone wakes or returns to the app.
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ poll(); if(!ws||ws.readyState!==1) connect(); } });
+  // Kill any previously-installed service worker + caches so the phone can never
+  // be stuck on a stale screen again. We do NOT register a new SW (no offline
+  // caching needed for a live LAN dashboard).
+  try{
+    if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(function(rs){ rs.forEach(function(r){ try{ r.unregister(); }catch(e){} }); }).catch(function(){}); }
+    if(window.caches && caches.keys){ caches.keys().then(function(ks){ ks.forEach(function(k){ try{ caches.delete(k); }catch(e){} }); }).catch(function(){}); }
+  }catch(e){}
 </script>
 </body>
 </html>`;
 
 // ── Server factory ───────────────────────────────────────────────────────────
-function createDashboard({ onMove, onSetMode, onCommand, getSnapshot }) {
+function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlist, onShotlistCommand }) {
   const app = express();
   let server = null;
   let wss = null;
   let currentPort = null;
   const clients = new Set();
 
-  app.get('/', (_req, res) => res.type('html').send(PAGE));
-  app.get('/manifest.webmanifest', (_req, res) => res.type('application/manifest+json').send(MANIFEST));
-  app.get('/sw.js', (_req, res) => res.type('application/javascript').send(SERVICE_WORKER));
+  // Never let the browser/PWA cache the live page, status, or service worker.
+  const noStore = (res) => res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  app.get('/', (_req, res) => { noStore(res); res.type('html').send(PAGE); });
+  app.get('/manifest.webmanifest', (_req, res) => { noStore(res); res.type('application/manifest+json').send(MANIFEST); });
+  app.get('/sw.js', (_req, res) => { noStore(res); res.type('application/javascript').send(SERVICE_WORKER); });
   app.get('/icon-192.png', (_req, res) => res.type('png').send(readIcon('icon-192.png')));
   app.get('/icon-512.png', (_req, res) => res.type('png').send(readIcon('icon-512.png')));
   app.get('/apple-touch-icon.png', (_req, res) => res.type('png').send(readIcon('icon-192.png')));
   app.get('/health', (_req, res) => res.json({ ok: true }));
+  // Live status as plain JSON — open this URL directly on the phone to confirm the
+  // phone can reach THIS server and see the real data, independent of the PWA page
+  // / service-worker cache. If this shows the right pilot/state but the app screen
+  // doesn't, the app's cached page is stale (remove & re-add the PWA).
+  app.get('/state', (_req, res) => { noStore(res); res.json({ pageBuild: PAGE_BUILD, serverStarted: SERVER_STARTED, status: getSnapshot() }); });
+  // Shot list: CSV assignments + per-shot status (the phone reads this).
+  app.get('/shotlist', (_req, res) => { noStore(res); res.json({ items: (getShotlist ? getShotlist() : []) || [] }); });
+  // Phone → desktop shot-list edit: { id, patch:{...} } to change fields/status, or
+  // { id, action:'delete' }. The desktop applies it and re-reports the updated list.
+  app.post('/shotlist-cmd', express.json(), (req, res) => {
+    try { if (onShotlistCommand && req.body && req.body.id) onShotlistCommand(req.body); } catch {}
+    res.json({ ok: true });
+  });
+
+  // ONE place that dispatches a phone command — used by BOTH the WebSocket and the
+  // HTTP POST /cmd path so the buttons work even when WebSockets don't.
+  function handleCommand(msg) {
+    if (!msg || !msg.cmd) return;
+    if (msg.cmd === 'move') {
+      Promise.resolve(onMove()).catch(() => {});
+    } else if (msg.cmd === 'setMode' && (msg.mode === 'auto' || msg.mode === 'manual')) {
+      try { onSetMode(msg.mode); } catch {}
+    } else if (msg.cmd === 'copyMedia' || msg.cmd === 'copyBella' || msg.cmd === 'dumpRaws' || msg.cmd === 'completeCard') {
+      try { if (onCommand) onCommand(msg.cmd); } catch {}
+    }
+  }
+
+  // Remote debug log from the phone — lets us read on the PC exactly what the
+  // phone's page received/rendered. GET /clientlog returns the recent entries.
+  const clientLogs = [];
+  app.post('/clientlog', express.json(), (req, res) => {
+    try {
+      clientLogs.push({ t: new Date().toISOString(), ip: req.ip, ...(req.body || {}) });
+      while (clientLogs.length > 100) clientLogs.shift();
+    } catch {}
+    res.json({ ok: true });
+  });
+  app.get('/clientlog', (_req, res) => { noStore(res); res.json(clientLogs); });
+
+  // Phone → desktop commands over plain HTTP (reliable fallback for the WebSocket).
+  app.post('/cmd', express.json(), (req, res) => {
+    try { handleCommand(req.body || {}); } catch {}
+    res.json({ ok: true });
+  });
 
   function broadcast(status) {
     const msg = JSON.stringify({ type: 'status', status });
@@ -358,13 +587,7 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot }) {
       ws.on('message', (data) => {
         let msg;
         try { msg = JSON.parse(data.toString()); } catch { return; }
-        if (msg && msg.cmd === 'move') {
-          Promise.resolve(onMove()).catch(() => {});
-        } else if (msg && msg.cmd === 'setMode' && (msg.mode === 'auto' || msg.mode === 'manual')) {
-          try { onSetMode(msg.mode); } catch {}
-        } else if (msg && (msg.cmd === 'copyMedia' || msg.cmd === 'copyBella' || msg.cmd === 'dumpRaws' || msg.cmd === 'completeCard')) {
-          try { if (onCommand) onCommand(msg.cmd); } catch {}
-        }
+        handleCommand(msg);
       });
       ws.on('close', () => clients.delete(ws));
       ws.on('error', () => clients.delete(ws));

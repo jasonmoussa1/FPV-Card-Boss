@@ -61,6 +61,11 @@ export interface FpvConfig {
   mediaRootPath: string;
   bellaRootPath: string;
   rawDumpPath?: string;
+  // When true, AUTO mode includes the Raw dump step (still requires rawDumpPath set).
+  autoDumpRaws?: boolean;
+  // When true, the GoPro robot toggles Horizon Lock ON in the batch exporter
+  // (requires the 'horizonLock' calibration point to be captured).
+  horizonLock?: boolean;
   sdCardDrive: string;
   goProAppPath: string;
   goProOutputPath?: string;

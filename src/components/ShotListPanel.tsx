@@ -144,6 +144,47 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Also seed as soon as a CSV is loaded (even if the panel was never opened) so the
+  // phone's view-only shot list has data without needing the desktop panel opened.
+  useEffect(() => {
+    if (items.length === 0 && assignments.length > 0) {
+      setItems(buildItemsFromAssignments(assignments, []));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments]);
+
+  // Report the shot list to main so the phone can view AND edit it. The stable `id`
+  // lets a phone edit map back to the exact row.
+  useEffect(() => {
+    try {
+      window.electron?.dashboardReportShotlist(
+        items.map(it => ({
+          id: it.id,
+          daySection: it.daySection, pilot: it.pilot, assignment: it.assignment,
+          stage: it.stage, setTime: it.setTime, flyTime: it.flyTime, dropTime: it.dropTime,
+          notes: it.notes, status: it.status,
+        }))
+      );
+    } catch { /* phone bridge not available */ }
+  }, [items]);
+
+  // Apply edits coming FROM the phone (mark done/skip, edit name/notes/fields, delete).
+  // Registered once; uses the stable setItems so it never sees a stale closure.
+  useEffect(() => {
+    if (!window.electron?.onDashboardShotlistCommand) return;
+    window.electron.onDashboardShotlistCommand((cmd) => {
+      if (!cmd || !cmd.id) return;
+      if (cmd.action === 'delete') {
+        setItems(prev => prev.filter(it => it.id !== cmd.id));
+        return;
+      }
+      if (cmd.patch && typeof cmd.patch === 'object') {
+        setItems(prev => prev.map(it => (it.id === cmd.id ? { ...it, ...cmd.patch } : it)));
+      }
+    });
+    return () => { window.electron?.offDashboardShotlistCommand?.(); };
+  }, []);
+
   // Checked pilots are "in scope" — this is the working set used for the exports.
   const scopedItems = useMemo(
     () => items.filter(it => !deselectedPilots.has(it.pilot)),

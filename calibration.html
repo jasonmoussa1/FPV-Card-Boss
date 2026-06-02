@@ -118,7 +118,7 @@
 
   <div id="header">
     <h1>🎯 GoPro Robot — Coordinate Calibration Mode</h1>
-    <div id="step-num">Step 1 of 10</div>
+    <div id="step-num">Step 1 of 14</div>
     <div id="step-label"></div>
     <div id="hint">SPACE = capture position &nbsp;·&nbsp; ESC = abort</div>
   </div>
@@ -137,6 +137,7 @@
     <div class="dot"        id="dot-10"></div>
     <div class="dot"        id="dot-11"></div>
     <div class="dot"        id="dot-12"></div>
+    <div class="dot"        id="dot-13"></div>
   </div>
 
   <div id="abort-hint">ESC — ABORT CALIBRATION</div>
@@ -149,6 +150,7 @@
       { key: 'tenBit',          label: 'Position your cursor over the 10-Bit Color checkbox — interact with GoPro freely — then press SPACE to capture' },
       { key: 'hyperSmooth',     label: 'Position your cursor over the HyperSmooth mode toggle/button — interact with GoPro freely — then press SPACE to capture' },
       { key: 'unGain',          label: 'Position your cursor over the un-gain (link/chain) button between Smoothness and Cropping — interact with GoPro freely — then press SPACE to capture' },
+      { key: 'horizonLock',     label: 'Horizon Lock — Hover over the Horizon Lock toggle/button in the GoPro batch exporter, then press SPACE (only clicked when Horizon Lock is turned on in the software)' },
       { key: 'smoothnessStart', label: 'Smoothness — START (value 50): Leave the smoothness slider at its default center position (value 50). Hover your cursor over the slider thumb and press SPACE.' },
       { key: 'smoothnessEnd',   label: 'Smoothness — END (value 15): Manually drag the smoothness slider left to value 15. Hover your cursor over the thumb at value 15 and press SPACE.' },
       { key: 'croppingStart',   label: 'Cropping Speed — START (value 50): Leave the cropping slider at its default center position (value 50). Hover your cursor over the slider thumb and press SPACE.' },
@@ -166,10 +168,11 @@
     let mouseY = 0;
 
     function updateUI() {
-      document.getElementById('step-num').textContent = 'Step ' + (current + 1) + ' of 13';
+      document.getElementById('step-num').textContent = 'Step ' + (current + 1) + ' of ' + steps.length;
       document.getElementById('step-label').textContent = steps[current].label;
-      for (let i = 0; i < 13; i++) {
+      for (let i = 0; i < steps.length; i++) {
         const d = document.getElementById('dot-' + i);
+        if (!d) continue;
         d.className = 'dot' + (i < current ? ' done' : i === current ? ' active' : '');
       }
     }
@@ -194,7 +197,7 @@
       coords[steps[current].key] = { x: pos.x, y: pos.y };
       current++;
 
-      if (current >= 13) {
+      if (current >= steps.length) {
         ipcRenderer.send('calibration-done', coords);
       } else {
         updateUI();

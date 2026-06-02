@@ -9,6 +9,11 @@ contextBridge.exposeInMainWorld('electron', {
   runGoProRobot: (coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => ipcRenderer.invoke('run-gopro-robot', coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta),
   dashboardGetInfo: () => ipcRenderer.invoke('dashboard-get-info'),
   dashboardSetPort: (port) => ipcRenderer.invoke('dashboard-set-port', port),
+  // Desktop AUTO/MANUAL button → set move mode; persisted + broadcast to the phone.
+  dashboardSetMoveMode: (mode) => ipcRenderer.invoke('dashboard-set-move-mode', mode),
+  // Live status pushed from main (so the desktop button mirrors phone-side changes).
+  onDashboardStatus: (callback) => ipcRenderer.on('dashboard-status', (_event, data) => callback(data)),
+  offDashboardStatus: () => ipcRenderer.removeAllListeners('dashboard-status'),
   onDashboardMoveDone: (callback) => ipcRenderer.on('dashboard-move-done', (_event, data) => callback(data)),
   offDashboardMoveDone: () => ipcRenderer.removeAllListeners('dashboard-move-done'),
   // Phone → desktop: forwarded delivery actions (copyMedia / copyBella / dumpRaws / completeCard)
@@ -16,6 +21,12 @@ contextBridge.exposeInMainWorld('electron', {
   offDashboardCommand: () => ipcRenderer.removeAllListeners('dashboard-command'),
   // Desktop → phone: report which delivery destinations are available + their progress
   dashboardReportState: (patch) => ipcRenderer.invoke('dashboard-report-state', patch),
+  // Desktop → phone: report the shot list (CSV assignments + per-shot status) so the
+  // phone can view it filtered by pilot/day.
+  dashboardReportShotlist: (items) => ipcRenderer.invoke('dashboard-report-shotlist', items),
+  // Phone → desktop: shot list edits (mark done/skip, edit fields, delete).
+  onDashboardShotlistCommand: (callback) => ipcRenderer.on('dashboard-shotlist-command', (_event, data) => callback(data)),
+  offDashboardShotlistCommand: () => ipcRenderer.removeAllListeners('dashboard-shotlist-command'),
   onCopyProgress: (callback) => {
     ipcRenderer.on('robocopy-progress', (_event, pct) => callback(pct));
   },

@@ -96,6 +96,8 @@ export default function Dashboard() {
       mediaRootPath: 'M:',
       bellaRootPath: 'S:',
       rawDumpPath: '',
+      autoDumpRaws: false,
+      horizonLock: false,
       sdCardDrive: 'E:\\',
       goProAppPath: '',
       goProOutputPath: 'C:\\Users\\Jason\\Videos',
@@ -174,6 +176,11 @@ export default function Dashboard() {
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [isShotListOpen, setIsShotListOpen] = useState<boolean>(false);
   const [dashboardInfo, setDashboardInfo] = useState<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual' } | null>(null);
+  // AUTO / MANUAL mode (mirrors main.cjs's moveMode; settable from desktop or phone).
+  const [moveMode, setMoveMode] = useState<'auto' | 'manual'>('manual');
+  // Auto-chain (move → media → bella → dump → complete) progress for the desktop UI.
+  const [autoChainStatus, setAutoChainStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [autoChainStep, setAutoChainStep] = useState<string>('');
   const [dashboardPortInput, setDashboardPortInput] = useState<string>('8723');
   const [historyPilotFilter, setHistoryPilotFilter] = useState<string>('ALL');
   const [copyProgress, setCopyProgress] = useState<number | null>(null);
@@ -407,10 +414,25 @@ export default function Dashboard() {
     (async () => {
       try {
         const info = await window.electron?.dashboardGetInfo();
-        if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? 8723)); }
+        if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? 8723)); if (info.moveMode === 'auto' || info.moveMode === 'manual') setMoveMode(info.moveMode); }
       } catch {}
     })();
   }, []);
+
+  // Keep the desktop AUTO/MANUAL button in sync with live changes (e.g. toggled
+  // from the phone). main.cjs pushes the full status object on every change.
+  useEffect(() => {
+    window.electron?.onDashboardStatus((s) => {
+      if (s && (s.moveMode === 'auto' || s.moveMode === 'manual')) setMoveMode(s.moveMode);
+    });
+    return () => { window.electron?.offDashboardStatus(); };
+  }, []);
+
+  // Toggle handler for the big AUTO/MANUAL button (persists via main + broadcasts).
+  const setMoveModeBoth = async (mode: 'auto' | 'manual') => {
+    setMoveMode(mode);
+    try { await window.electron?.dashboardSetMoveMode(mode); } catch {}
+  };
 
   // When the phone (or auto-move) moves the files, reflect it in the desktop UI.
   useEffect(() => {
@@ -774,13 +796,16 @@ export default function Dashboard() {
       setBellaDriveCopyResult(null);
       setBellaDriveCopyError(null);
       setGoProQueueCleared(false);
+      // Clear any prior auto-chain banner for this fresh run.
+      setAutoChainStatus('idle');
+      setAutoChainStep('');
       await runGoProRobot(
         config.robotCoords,
         robotRawPath,
         localStabilizedPath,
         config.goProAppPath,
         config.goProOutputPath || 'C:\\Users\\Jason\\Videos',
-        { cardId: currentCardId, pilotName: selectedPilot, artistName: activeAssignmentName }
+        { cardId: currentCardId, pilotName: selectedPilot, artistName: activeAssignmentName, horizonLock: !!config.horizonLock }
       );
     } catch (err: unknown) {
       setGoProRobotStatus('error');
@@ -801,8 +826,8 @@ export default function Dashboard() {
     await runRobotConfirmed();
   };
 
-  const handleMoveExports = async () => {
-    if (!robotStartTime) return;
+  const handleMoveExports = async (): Promise<boolean> => {
+    if (!robotStartTime) return false;
     setMoveExportsStatus('moving');
     try {
       const result = await window.electron?.moveStabilizedFiles({
@@ -816,17 +841,20 @@ export default function Dashboard() {
           setSizeInput(result.totalGB.toFixed(2) + ' GB');
         }
         setMoveExportsStatus('success');
+        return true;
       } else {
         setMoveExportsError(result?.error ?? 'Unknown error');
         setMoveExportsStatus('error');
+        return false;
       }
     } catch (err: unknown) {
       setMoveExportsError(String(err));
       setMoveExportsStatus('error');
+      return false;
     }
   };
 
-  const handleCopyToMediaDrive = async () => {
+  const handleCopyToMediaDrive = async (): Promise<boolean> => {
     setMediaDriveCopyStatus('copying');
     setMediaDriveCopyProgress(0);
     setMediaDriveCopyError(null);
@@ -839,23 +867,26 @@ export default function Dashboard() {
       if (result?.success) {
         setMediaDriveCopyResult({ fileCount: result.fileCount ?? 0, sizeGB: result.sizeGB ?? '0.00 GB' });
         setMediaDriveCopyStatus('success');
+        return true;
       } else {
         setMediaDriveCopyError(result?.message ?? 'Unknown error copying to Media Drive');
         setMediaDriveCopyStatus('error');
+        return false;
       }
     } catch (err: unknown) {
       setMediaDriveCopyError(String(err));
       setMediaDriveCopyStatus('error');
+      return false;
     } finally {
       setMediaDriveCopyProgress(null);
     }
   };
 
-  const handleCopyToBellaDrive = async () => {
+  const handleCopyToBellaDrive = async (): Promise<boolean> => {
     if (!sanitizedArtist || activeAssignmentName === 'NO ASSIGNMENTS IN QUEUE') {
       setBellaDriveCopyError('No artist or shot name assigned to this card. Please verify the shot list assignment before copying to Bella.');
       setBellaDriveCopyStatus('error');
-      return;
+      return false;
     }
     setBellaDriveCopyStatus('copying');
     setBellaDriveCopyProgress(0);
@@ -869,13 +900,16 @@ export default function Dashboard() {
       if (result?.success) {
         setBellaDriveCopyResult({ artistName: sanitizedArtist, fileCount: result.fileCount ?? 0, sizeGB: result.sizeGB ?? '0.00 GB' });
         setBellaDriveCopyStatus('success');
+        return true;
       } else {
         setBellaDriveCopyError(result?.message ?? 'Unknown error copying to Bella Drive');
         setBellaDriveCopyStatus('error');
+        return false;
       }
     } catch (err: unknown) {
       setBellaDriveCopyError(String(err));
       setBellaDriveCopyStatus('error');
+      return false;
     } finally {
       setBellaDriveCopyProgress(null);
     }
@@ -917,17 +951,17 @@ export default function Dashboard() {
     }
   };
 
-  const handleDumpRaws = async () => {
+  const handleDumpRaws = async (): Promise<boolean> => {
     const dumpPath = config.rawDumpPath?.trim();
     if (!selectedPilot) {
       setDumpRawsError('Select a pilot first.');
       setDumpRawsStatus('error');
-      return;
+      return false;
     }
     if (!dumpPath) {
       setDumpRawsError('Set a Raw Dump Folder in Setup first.');
       setDumpRawsStatus('error');
-      return;
+      return false;
     }
     const pilotRootPath = `${config.localRootPath.trim()}\\${sanitizedEvent}\\${sanitizedPilot}`;
     setDumpRawsStatus('dumping');
@@ -939,17 +973,105 @@ export default function Dashboard() {
       if (result?.success) {
         setDumpRawsResult({ copied: result.copied ?? 0, skipped: result.skipped ?? 0, sizeGB: result.sizeGB ?? '0.00' });
         setDumpRawsStatus('success');
+        return true;
       } else {
         setDumpRawsError(result?.message ?? 'Unknown error dumping raws.');
         setDumpRawsStatus('error');
+        return false;
       }
     } catch (err: unknown) {
       setDumpRawsError(String(err));
       setDumpRawsStatus('error');
+      return false;
     } finally {
       setDumpRawsProgress(null);
     }
   };
+
+  // Copy the SD card into the local RAW folder (Step ②). Shared by the prominent
+  // step button and the small inline "SD COPY" button so there's one source of truth.
+  const handleCopySdToRaw = async () => {
+    setSdCopyResult(null);
+    setCopyProgress(0);
+    try {
+      const result = await copySDtoRAW(config.sdCardDrive, localRawPath);
+      setCopyProgress(100);
+      if (result.success && result.sourceFileCount !== undefined && result.fileCount !== undefined && result.sizeGB !== undefined && result.matched !== undefined) {
+        setSdCopyResult({ sourceFileCount: result.sourceFileCount, fileCount: result.fileCount, sizeGB: result.sizeGB, matched: result.matched, batchSubfolder: result.batchSubfolder });
+      }
+      if (result.success) setSdBatchRawPath(result.activeRawPath ?? '');
+      setTimeout(() => setCopyProgress(null), 1500);
+    } catch {
+      setCopyProgress(null);
+    }
+  };
+
+  // ── AUTO MODE ──────────────────────────────────────────────────────────────
+  // When an export completes and AUTO is on, deliver everything and finish the
+  // card with no clicks: move → Media → Bella → (Raw dump if enabled) → Complete
+  // Card & advance. Stops and alerts if any step fails (card stays open so you can
+  // fix it and finish manually). Festival mode only.
+  const autoChainRunningRef = useRef(false);
+  const runAutoChain = async () => {
+    if (autoChainRunningRef.current) return;
+    const fail = (msg: string) => {
+      setAutoChainStatus('error');
+      setAutoChainStep(msg);
+      try { window.electron?.dashboardReportState({ lastActivity: 'AUTO stopped: ' + msg }); } catch {}
+      alert('Auto mode stopped:\n\n' + msg + '\n\nThe card was NOT completed. Fix the issue and finish manually.');
+    };
+    // Never auto-proceed on a short/over count export.
+    if (goProExportProgress && goProExportProgress.expectedCount > 0 && goProExportProgress.fileCount !== goProExportProgress.expectedCount) {
+      fail(`File count looks off (${goProExportProgress.fileCount} of ${goProExportProgress.expectedCount}). Auto stopped before moving.`);
+      return;
+    }
+    if (activeAssignmentName === 'NO ASSIGNMENTS IN QUEUE') {
+      fail('No card/shot is assigned, so the card can’t be auto-completed. Assign one, then move manually.');
+      return;
+    }
+    autoChainRunningRef.current = true;
+    setAutoChainStatus('running');
+    try {
+      setAutoChainStep('Moving files to STABILIZED…');
+      if (!(await handleMoveExports())) { fail('Moving files to the STABILIZED folder failed.'); return; }
+
+      if (mediaToggleOn) {
+        setAutoChainStep('Copying to Media Drive…');
+        if (!(await handleCopyToMediaDrive())) { fail('Copy to Media Drive failed.'); return; }
+      }
+
+      if (bellaToggleOn) {
+        if (!bellaArtistOk) { fail('Bella Drive is on but no artist is assigned to this card.'); return; }
+        setAutoChainStep('Copying to Bella Drive…');
+        if (!(await handleCopyToBellaDrive())) { fail('Copy to Bella Drive failed.'); return; }
+      }
+
+      if (config.autoDumpRaws) {
+        if (!config.rawDumpPath?.trim()) { fail('Raw dump is turned on for Auto mode but no Raw Dump Folder is set in Setup.'); return; }
+        setAutoChainStep('Dumping raws…');
+        if (!(await handleDumpRaws())) { fail('Raw dump failed.'); return; }
+      }
+
+      setAutoChainStep('Completing card & advancing…');
+      handleCompleteCardConfirmed();
+      setAutoChainStatus('done');
+      setAutoChainStep('Auto-complete finished — ready for the next card.');
+      try { window.electron?.dashboardReportState({ lastActivity: 'AUTO: card delivered & completed.' }); } catch {}
+    } catch (e: unknown) {
+      fail(String(e));
+    } finally {
+      autoChainRunningRef.current = false;
+    }
+  };
+
+  // Trigger the auto chain the moment an export finishes (only when AUTO is on).
+  useEffect(() => {
+    if (!isSimpleMode && moveMode === 'auto' && goProExportStatus === 'complete') {
+      runAutoChain();
+    }
+    // Intentionally keyed on the export-complete transition only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goProExportStatus]);
 
   const applyDashboardPort = async () => {
     const p = parseInt(dashboardPortInput, 10);
@@ -1008,7 +1130,7 @@ export default function Dashboard() {
         simpleLocalStabPath,
         config.goProAppPath,
         config.goProOutputPath || 'C:\\Users\\Jason\\Videos',
-        { cardId: sanitizedSimpleFolder, pilotName: '', artistName: simpleFolderName }
+        { cardId: sanitizedSimpleFolder, pilotName: '', artistName: simpleFolderName, horizonLock: !!config.horizonLock }
       );
     } catch (err: unknown) {
       setGoProRobotStatus('error');
@@ -1322,9 +1444,28 @@ export default function Dashboard() {
   const bellaHint = bellaAvailable ? '' : (!bellaToggleOn ? 'Bella Drive is turned off in Setup' : !moveDone ? 'Move files to STABILIZED first' : 'Assign an artist to this card first');
   const dumpHint = dumpAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : !selectedPilot ? 'Select a pilot first' : 'Set a Raw Dump Folder in Setup');
   const completeHint = completeAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : 'Assign a card/shot first');
+  // Derive the single workflow state the phone shows (idle / running / complete /
+  // error) from the desktop's three lifecycle machines. This is the field that was
+  // missing before — without it the phone's status + Move Files button never left
+  // IDLE, which also kept the Deliver To buttons greyed out.
+  const workflowState: 'idle' | 'running' | 'complete' | 'error' =
+    (goProExportStatus === 'error' || goProRobotStatus === 'error' || moveExportsStatus === 'error') ? 'error'
+    : (moveExportsStatus === 'success' || goProExportStatus === 'complete') ? 'complete'
+    : (goProRobotStatus === 'running' || goProExportStatus === 'polling' || moveExportsStatus === 'moving') ? 'running'
+    : 'idle';
   useEffect(() => {
     window.electron?.dashboardReportState({
       mode: isSimpleMode ? 'simple' : 'festival',
+      // Top-level workflow status + context so the phone mirrors the desktop.
+      state: workflowState,
+      cardId: currentCardId || '',
+      pilotName: selectedPilot || '',
+      artistName: activeAssignmentName && activeAssignmentName !== 'NO ASSIGNMENTS IN QUEUE' ? activeAssignmentName : '',
+      fileCount: goProExportProgress?.fileCount ?? 0,
+      expectedCount: goProExportProgress?.expectedCount ?? 0,
+      totalSizeMB: goProExportProgress?.totalSizeMB ?? 0,
+      countLabel: goProExportProgress?.countLabel ?? '',
+      lastMovedCount: moveExportsResult?.moved ?? 0,
       mediaAvailable,
       mediaState: mediaDriveCopyStatus,
       mediaDest: isSimpleMode ? simpleMediaPath : destinationMediaDrivePath,
@@ -1347,6 +1488,9 @@ export default function Dashboard() {
     mediaDriveCopyStatus, bellaDriveCopyStatus, dumpRawsStatus,
     destinationMediaDrivePath, destinationBellaSocialPath, simpleMediaPath, simpleBellaPath,
     config.rawDumpPath,
+    // Workflow status + context so the phone updates the moment the desktop does.
+    workflowState, currentCardId, selectedPilot, activeAssignmentName,
+    goProExportProgress, moveExportsResult,
   ]);
 
   return (
@@ -1870,7 +2014,7 @@ export default function Dashboard() {
                 ) : (
                   <p className="text-xs text-slate-500 italic">No LAN/Tailscale address detected yet — connect to Wi-Fi (or start Tailscale) and reopen Setup.</p>
                 )}
-                <p className="text-[10px] font-mono text-slate-600 mt-1">Move mode (set from the phone): <span className="text-slate-400">{dashboardInfo?.moveMode ?? '—'}</span></p>
+                <p className="text-[10px] font-mono text-slate-600 mt-1">Completion mode (set here or from the phone): <span className={moveMode === 'auto' ? 'text-emerald-400' : 'text-cyan-400'}>{moveMode.toUpperCase()}</span></p>
               </div>
             </div>
           </div>
@@ -2361,6 +2505,29 @@ export default function Dashboard() {
                   ? '✓ Directories Created'
                   : '① Start Here — Create Directory Paths'}
               </button>
+
+              {/* STEP 2 — copy the SD card into the local RAW folder. The obvious
+                  next action after creating directories: prominent (a touch smaller
+                  than Step ①), amber, and pulses once the directories are made. */}
+              <button
+                disabled={copyProgress !== null}
+                onClick={handleCopySdToRaw}
+                className={`w-full py-3.5 px-6 rounded-xl text-sm font-black uppercase tracking-widest transition border-2 flex items-center justify-center gap-2 disabled:cursor-not-allowed active:scale-[.99] ${
+                  sdCopyResult?.matched
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.35)]'
+                    : copyProgress !== null
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/60'
+                    : foldersCreatedStatus === 'done' && sdCopyResult === null
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500 hover:bg-amber-500/20 shadow-[0_0_18px_rgba(245,158,11,0.30)] animate-pulse'
+                    : 'bg-amber-500/5 text-amber-400 border-amber-500/70 hover:bg-amber-500/15'
+                }`}
+              >
+                {copyProgress !== null
+                  ? `⏳ Copying SD Card... ${Math.round(copyProgress)}%`
+                  : sdCopyResult?.matched
+                  ? '✓ SD Card Copied to RAW'
+                  : `② Copy SD Card → Local RAW  (SRC: ${config.sdCardDrive})`}
+              </button>
               <div className="border-b border-slate-900 pb-1" />
 
               {/* DUMP RAWS — consolidate this pilot's raw files into the flat Raw Dump folder */}
@@ -2421,21 +2588,7 @@ export default function Dashboard() {
                       </span>
                       <button
                         disabled={copyProgress !== null}
-                        onClick={async () => {
-                          setSdCopyResult(null);
-                          setCopyProgress(0);
-                          try {
-                            const result = await copySDtoRAW(config.sdCardDrive, localRawPath);
-                            setCopyProgress(100);
-                            if (result.success && result.sourceFileCount !== undefined && result.fileCount !== undefined && result.sizeGB !== undefined && result.matched !== undefined) {
-                              setSdCopyResult({ sourceFileCount: result.sourceFileCount, fileCount: result.fileCount, sizeGB: result.sizeGB, matched: result.matched, batchSubfolder: result.batchSubfolder });
-                            }
-                            if (result.success) setSdBatchRawPath(result.activeRawPath ?? '');
-                            setTimeout(() => setCopyProgress(null), 1500);
-                          } catch {
-                            setCopyProgress(null);
-                          }
-                        }}
+                        onClick={handleCopySdToRaw}
                         className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-amber-500 rounded text-[10px] font-black uppercase tracking-wider"
                       >
                         {copyProgress !== null ? 'COPYING…' : 'SD COPY'}
@@ -2705,6 +2858,77 @@ export default function Dashboard() {
                     ))}
                   </div>
                 )}
+
+                {/* ── COMPLETION MODE: big AUTO / MANUAL toggle ── */}
+                <div className="w-full rounded-2xl border border-slate-700 bg-slate-900/60 p-4 space-y-3">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Completion Mode</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setMoveModeBoth('manual')}
+                      className={`py-5 rounded-xl text-base font-black uppercase tracking-widest transition-colors ${moveMode === 'manual' ? 'bg-cyan-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                    >
+                      🖐️ Manual
+                    </button>
+                    <button
+                      onClick={() => setMoveModeBoth('auto')}
+                      className={`py-5 rounded-xl text-base font-black uppercase tracking-widest transition-colors ${moveMode === 'auto' ? 'bg-emerald-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                    >
+                      ⚡ Auto
+                    </button>
+                  </div>
+                  {moveMode === 'auto' ? (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                        When an export finishes, files auto-move to STABILIZED{mediaToggleOn ? ', Media' : ''}{bellaToggleOn ? ', Bella' : ''}{config.autoDumpRaws ? ', Raw dump' : ''}, then the card auto-completes and advances — no clicks. Stops &amp; alerts if any step fails (card stays open).
+                      </p>
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!config.autoDumpRaws}
+                          onChange={(e) => setConfig(prev => ({ ...prev, autoDumpRaws: e.target.checked }))}
+                          className="w-4 h-4 accent-cyan-500"
+                        />
+                        <span className="text-xs font-bold text-slate-300">
+                          Include Raw dump in Auto{config.rawDumpPath?.trim() ? '' : ' (set a Raw Dump Folder in Setup first)'}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Manual: you click Move / Copy / Complete yourself. Switch to Auto to deliver &amp; complete each card hands-free.
+                    </p>
+                  )}
+                  {moveMode === 'auto' && autoChainStatus !== 'idle' && (
+                    <div className={`rounded-xl px-3 py-2 text-xs font-bold ${autoChainStatus === 'error' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : autoChainStatus === 'done' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 animate-pulse'}`}>
+                      {autoChainStatus === 'running' ? '⚙️ ' : autoChainStatus === 'done' ? '✓ ' : '✗ '}{autoChainStep}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── HORIZON LOCK — GoPro export setting toggled by the robot ── */}
+                <div className="w-full rounded-2xl border border-slate-700 bg-slate-900/60 p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-300">Horizon Lock</span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">When ON, the robot turns on Horizon Lock in the GoPro batch exporter before exporting.</p>
+                    </div>
+                    <button
+                      onClick={() => setConfig(prev => ({ ...prev, horizonLock: !prev.horizonLock }))}
+                      className={`shrink-0 px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition border-2 ${
+                        config.horizonLock
+                          ? 'bg-sky-500 text-slate-950 border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.4)]'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                      }`}
+                    >
+                      {config.horizonLock ? '🌐 ON' : 'OFF'}
+                    </button>
+                  </div>
+                  {config.horizonLock && !config.robotCoords?.horizonLock && (
+                    <p className="text-[11px] font-bold text-amber-400">
+                      ⚠ Re-run 🎯 Calibrate GoPro Robot in Setup to capture the Horizon Lock click point — it won’t toggle until then.
+                    </p>
+                  )}
+                </div>
 
                 <button
                   onClick={handleRunRobot}

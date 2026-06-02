@@ -51,11 +51,22 @@ const status = {
 // the desktop without letting the renderer overwrite transport/job fields.
 const REPORTABLE_FIELDS = new Set([
   'mode',
+  // Top-level workflow status + card context. The desktop renderer owns the real
+  // lifecycle (robot → export → move), so it reports these and the phone mirrors
+  // exactly what the operator sees — even for flows main's robot path never saw.
+  'state',
+  'cardId', 'pilotName', 'artistName',
+  'fileCount', 'expectedCount', 'totalSizeMB', 'countLabel',
+  'lastMovedCount', 'lastActivity',
   'mediaAvailable', 'mediaState', 'mediaDest', 'mediaHint',
   'bellaAvailable', 'bellaState', 'bellaDest', 'bellaHint',
   'dumpAvailable', 'dumpState', 'dumpDest', 'dumpHint',
   'completeAvailable', 'completeHint',
 ]);
+
+// Shot list (CSV assignments + per-shot status) reported by the desktop renderer
+// and served to the phone at GET /shotlist for view-only browsing.
+let shotlist = [];
 
 // Active job context — main keeps its OWN copy so it can move files (auto / from
 // the phone) without depending on the renderer's React state.
@@ -142,6 +153,13 @@ app.whenReady().then(() => {
     // New per-destination actions are run by the desktop renderer's existing handlers.
     onCommand: (cmd) => forwardToRenderer(cmd),
     getSnapshot: () => status,
+    getShotlist: () => shotlist,
+    // Phone shot-list edit → desktop ShotListPanel (which owns the data + localStorage).
+    onShotlistCommand: (cmd) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try { mainWindow.webContents.send('dashboard-shotlist-command', cmd); } catch {}
+      }
+    },
   });
   try { dashboard.start(dashboardPort); } catch (e) { console.error('[dashboard] failed to start:', e && e.message); }
 
@@ -326,7 +344,10 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
             });
           } catch {}
 
-          // Bridge → phone dashboard, and apply the auto-move rule.
+          // Bridge → phone dashboard. The desktop renderer owns the AUTO chain
+          // (move → media → bella → dump → complete) because it has all the paths
+          // and handlers; it triggers off this 'complete' state. Main only flags a
+          // count mismatch so auto never proceeds on a bad export.
           setStatus({
             state: 'complete',
             fileCount: files.length,
@@ -334,12 +355,10 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
             countLabel,
             lastActivity: `Export complete (${countLabel}) at ${nowTime()}`,
           });
-          if (status.moveMode === 'auto' && expectedCount > 0 && files.length === expectedCount) {
-            setStatus({ lastActivity: `Auto-move: moving ${files.length} files…` });
-            await moveNow();
-          } else if (expectedCount > 0 && files.length !== expectedCount) {
-            // Count mismatch → never auto-move; flag as error so the phone shows
-            // the problem and offers a manual "Move Files Anyway".
+          if (expectedCount > 0 && files.length !== expectedCount) {
+            // Count mismatch → flag as error so the phone shows the problem and
+            // offers a manual "Move Files Anyway"; the renderer's auto chain also
+            // refuses to run on a mismatch.
             setStatus({ state: 'error', lastActivity: `Count mismatch: ${files.length} of ${expectedCount}. Manual move required.` });
           }
           return true;
@@ -549,7 +568,14 @@ ipcMain.handle('calibrate-robot', async () => {
 ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => {
   try {
     const outputDir = goProOutputPath || 'C:\\Users\\Jason\\Videos';
-    const { tenBit, hyperSmooth, smoothnessStart, smoothnessEnd, unGain, croppingStart, croppingEnd, aspectRatioOpen, aspectRatio8x7, start, dropZone, batchList, removeQueue } = coords;
+    const { tenBit, hyperSmooth, smoothnessStart, smoothnessEnd, unGain, croppingStart, croppingEnd, aspectRatioOpen, aspectRatio8x7, start, dropZone, batchList, removeQueue, horizonLock } = coords;
+
+    // Horizon Lock is OPTIONAL: only clicked when the software toggle is on AND a
+    // calibration point exists for it. Built as a script fragment injected below.
+    const wantHorizonLock = !!(meta && meta.horizonLock) && horizonLock && typeof horizonLock.x === 'number' && typeof horizonLock.y === 'number';
+    const horizonLockStep = wantHorizonLock
+      ? `\n# Step 3.5 — Toggle Horizon Lock ON (enabled in software)\nClick-GoPro -x ${horizonLock.x} -y ${horizonLock.y} -delayMs 800\n`
+      : '\n# Step 3.5 — Horizon Lock skipped (off in software or not calibrated)\n';
     const robotStartTime = Date.now();
 
     // Count expected output files from RAW folder
@@ -858,7 +884,7 @@ Click-GoPro -x ${hyperSmooth.x} -y ${hyperSmooth.y} -delayMs 800
 
 # Step 3 — Click unGain button (must happen before adjusting sliders)
 Click-GoPro -x ${unGain.x} -y ${unGain.y} -delayMs 800
-
+${horizonLockStep}
 # Step 4 — Drag smoothness slider from value 50 (start) to value 15 (end)
 [MouseRobot]::SetForegroundWindow($script:goProHwnd)
 Start-Sleep -Milliseconds 100
@@ -1009,6 +1035,34 @@ ipcMain.handle('dashboard-report-state', (_event, patch) => {
   }
   setStatus(clean);
   return { ok: true };
+});
+
+// The desktop renderer pushes the shot list (CSV assignments + per-shot status) so
+// the phone can view it filtered by pilot/day. Kept lightweight (display fields only).
+ipcMain.handle('dashboard-report-shotlist', (_event, items) => {
+  if (!Array.isArray(items)) { shotlist = []; return { ok: true }; }
+  shotlist = items.map((it) => ({
+    id: String(it.id || ''),
+    daySection: String(it.daySection || ''),
+    pilot: String(it.pilot || ''),
+    assignment: String(it.assignment || ''),
+    stage: String(it.stage || ''),
+    setTime: String(it.setTime || ''),
+    flyTime: String(it.flyTime || ''),
+    dropTime: String(it.dropTime || ''),
+    notes: String(it.notes || ''),
+    status: String(it.status || 'pending'),
+  }));
+  return { ok: true };
+});
+
+// Desktop big AUTO/MANUAL button → set the move mode (persisted + broadcast to
+// the phone). Same field the phone's Auto/Manual toggle controls.
+ipcMain.handle('dashboard-set-move-mode', (_event, mode) => {
+  if (mode !== 'auto' && mode !== 'manual') return { error: 'Mode must be auto or manual.' };
+  setStatus({ moveMode: mode, lastActivity: `Move mode set to ${mode.toUpperCase()} (desktop) at ${nowTime()}` });
+  saveDashboardConfig();
+  return { ok: true, moveMode: mode };
 });
 
 ipcMain.handle('dashboard-set-port', (_event, port) => {
