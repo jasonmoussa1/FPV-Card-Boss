@@ -181,7 +181,10 @@ export default function Dashboard() {
   // Auto-chain (move → media → bella → dump → complete) progress for the desktop UI.
   const [autoChainStatus, setAutoChainStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [autoChainStep, setAutoChainStep] = useState<string>('');
+  // Toast shown when the phone marks a computer-linked shot complete (with a ding).
+  const [mobileToast, setMobileToast] = useState<string>('');
   const [dashboardPortInput, setDashboardPortInput] = useState<string>('8723');
+  const [movePasswordInput, setMovePasswordInput] = useState<string>('');
   const [historyPilotFilter, setHistoryPilotFilter] = useState<string>('ALL');
   const [copyProgress, setCopyProgress] = useState<number | null>(null);
   const [mediaCopyProgress, setMediaCopyProgress] = useState<number | null>(null);
@@ -414,9 +417,34 @@ export default function Dashboard() {
     (async () => {
       try {
         const info = await window.electron?.dashboardGetInfo();
-        if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? 8723)); if (info.moveMode === 'auto' || info.moveMode === 'manual') setMoveMode(info.moveMode); }
+        if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? 8723)); setMovePasswordInput(info.movePassword ?? ''); if (info.moveMode === 'auto' || info.moveMode === 'manual') setMoveMode(info.moveMode); }
       } catch {}
     })();
+  }, []);
+
+  // Phone marked a computer-linked shot complete → ding + toast so the operator
+  // knows that footage is about to be sent over.
+  useEffect(() => {
+    window.electron?.onDashboardNotify?.((n) => {
+      try {
+        const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const ctx = new Ctx();
+        const beep = (freq: number, start: number) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
+          g.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+          g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + start + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + 0.45);
+          o.start(ctx.currentTime + start); o.stop(ctx.currentTime + start + 0.45);
+        };
+        ctx.resume?.();
+        beep(880, 0); beep(1175, 0.18);
+      } catch { /* audio blocked — toast still shows */ }
+      const name = n && n.name ? n.name : 'A shot';
+      setMobileToast(`✅ “${name}” marked complete on mobile — footage incoming`);
+      setTimeout(() => setMobileToast(''), 9000);
+    });
+    return () => { window.electron?.offDashboardNotify?.(); };
   }, []);
 
   // Keep the desktop AUTO/MANUAL button in sync with live changes (e.g. toggled
@@ -1496,6 +1524,13 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen text-white flex flex-col font-sans border-none" id="fpv-boss-body">
 
+      {/* Mobile shot-complete ding toast */}
+      {mobileToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black text-sm shadow-[0_10px_40px_rgba(16,185,129,0.5)] border border-emerald-300 animate-pulse cursor-pointer" onClick={() => setMobileToast('')}>
+          {mobileToast}
+        </div>
+      )}
+
       {/* SOLID HEADER */}
       <header className="bg-slate-900 shadow-xl p-6 md:p-8 sticky top-0 z-40 flex flex-wrap items-center justify-between gap-6 border-b border-slate-800">
         <div className="flex items-center gap-4">
@@ -1997,6 +2032,20 @@ export default function Dashboard() {
                       Apply
                     </button>
                   </div>
+                </div>
+
+                {/* Move Files password — shown in plain text. Phone needs this to open
+                    the Move Files / Stabilizer section. Blank = no password needed. */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Phone “Move Files” Password</label>
+                  <input
+                    type="text"
+                    value={movePasswordInput}
+                    placeholder="(blank = no password)"
+                    onChange={e => { setMovePasswordInput(e.target.value); window.electron?.dashboardSetMovePassword(e.target.value); }}
+                    className="bg-slate-950 rounded-xl px-4 py-3 text-sm text-amber-300 font-mono focus:ring-2 focus:ring-amber-500 border-none w-56"
+                  />
+                  <span className="text-[10px] text-slate-500">Anyone can use the Shot List &amp; Slate; this only gates the Move Files section.</span>
                 </div>
               </div>
 

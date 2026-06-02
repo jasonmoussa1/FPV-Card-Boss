@@ -12,7 +12,8 @@ interface ElectronBridge {
   calibrateRobot(): Promise<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string, meta?: { cardId: string; pilotName: string; artistName: string; horizonLock?: boolean }): Promise<{ success: boolean; message: string; robotStartTime?: number }>;
-  dashboardGetInfo(): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual' }>;
+  dashboardGetInfo(): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; movePassword?: string }>;
+  dashboardSetMovePassword(pw: string): Promise<{ ok: boolean; movePassword: string }>;
   dashboardSetPort(port: number): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; error?: string }>;
   dashboardSetMoveMode(mode: 'auto' | 'manual'): Promise<{ ok?: boolean; moveMode?: 'auto' | 'manual'; error?: string }>;
   onDashboardStatus(callback: (status: { moveMode?: 'auto' | 'manual'; [k: string]: unknown }) => void): void;
@@ -32,9 +33,9 @@ interface ElectronBridge {
     dumpAvailable?: boolean; dumpState?: 'idle' | 'dumping' | 'success' | 'error'; dumpDest?: string; dumpHint?: string;
     completeAvailable?: boolean; completeHint?: string;
   }): Promise<{ ok: boolean }>;
-  dashboardReportShotlist(items: Array<{ id: string; daySection: string; pilot: string; assignment: string; stage?: string; setTime?: string; flyTime?: string; dropTime?: string; notes?: string; status: string }>): Promise<{ ok: boolean }>;
-  onDashboardShotlistCommand(callback: (cmd: { id: string; action?: 'delete'; patch?: Record<string, string> }) => void): void;
-  offDashboardShotlistCommand(): void;
+  dashboardReportShotlist(items: Array<{ id: string; daySection: string; pilot: string; assignment: string; stage?: string; setTime?: string; flyTime?: string; dropTime?: string; notes?: string; status: string; takes?: string }>): Promise<{ ok: boolean }>;
+  onDashboardNotify(callback: (n: { type?: string; name?: string }) => void): void;
+  offDashboardNotify(): void;
   onCopyProgress(callback: (pct: number) => void): void;
   offCopyProgress(): void;
   onGoProRobotStatus(callback: (data: { success: boolean; exitCode: number; error?: string }) => void): void;

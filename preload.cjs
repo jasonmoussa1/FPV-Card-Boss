@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('electron', {
   dashboardSetPort: (port) => ipcRenderer.invoke('dashboard-set-port', port),
   // Desktop AUTO/MANUAL button → set move mode; persisted + broadcast to the phone.
   dashboardSetMoveMode: (mode) => ipcRenderer.invoke('dashboard-set-move-mode', mode),
+  // Desktop sets the simple password that gates the phone's Move Files section.
+  dashboardSetMovePassword: (pw) => ipcRenderer.invoke('dashboard-set-move-password', pw),
   // Live status pushed from main (so the desktop button mirrors phone-side changes).
   onDashboardStatus: (callback) => ipcRenderer.on('dashboard-status', (_event, data) => callback(data)),
   offDashboardStatus: () => ipcRenderer.removeAllListeners('dashboard-status'),
@@ -24,9 +26,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Desktop → phone: report the shot list (CSV assignments + per-shot status) so the
   // phone can view it filtered by pilot/day.
   dashboardReportShotlist: (items) => ipcRenderer.invoke('dashboard-report-shotlist', items),
-  // Phone → desktop: shot list edits (mark done/skip, edit fields, delete).
-  onDashboardShotlistCommand: (callback) => ipcRenderer.on('dashboard-shotlist-command', (_event, data) => callback(data)),
-  offDashboardShotlistCommand: () => ipcRenderer.removeAllListeners('dashboard-shotlist-command'),
+  // Phone → desktop alert (shot completed on mobile): ding + toast on the computer.
+  onDashboardNotify: (callback) => ipcRenderer.on('dashboard-notify', (_event, data) => callback(data)),
+  offDashboardNotify: () => ipcRenderer.removeAllListeners('dashboard-notify'),
   onCopyProgress: (callback) => {
     ipcRenderer.on('robocopy-progress', (_event, pct) => callback(pct));
   },

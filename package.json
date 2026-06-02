@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "dev:electron": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && electron .\"",
     "build:server": "esbuild dashboardServer.cjs --bundle --platform=node --format=cjs --outfile=dashboardServer.bundled.cjs --external:bufferutil --external:utf-8-validate",
-    "build:exe": "tsc --noEmit && vite build && npm run build:server && electron-builder --win && node deploy.cjs"
+    "build:slate": "vite build --config vite.slate.config.ts",
+    "build:exe": "tsc --noEmit && vite build && npm run build:slate && npm run build:server && electron-builder --win && node deploy.cjs"
   },
   "build": {
     "appId": "com.fpvcardboss.app",
@@ -27,6 +28,7 @@
     },
     "files": [
       "dist/**/*",
+      "dist-slate/**/*",
       "main.cjs",
       "preload.cjs",
       "calibration.html",
@@ -42,6 +44,7 @@
     "express": "^5.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^6.2.3",
@@ -49,6 +52,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.21",
@@ -57,6 +61,7 @@
     "electron-builder": "^26.8.1",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
+    "vite-plugin-singlefile": "^2.3.3",
     "wait-on": "^9.0.10"
   }
 }

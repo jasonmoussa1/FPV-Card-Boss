@@ -162,28 +162,12 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
           id: it.id,
           daySection: it.daySection, pilot: it.pilot, assignment: it.assignment,
           stage: it.stage, setTime: it.setTime, flyTime: it.flyTime, dropTime: it.dropTime,
-          notes: it.notes, status: it.status,
+          notes: it.notes, status: it.status, takes: it.takes || '',
         }))
       );
     } catch { /* phone bridge not available */ }
   }, [items]);
 
-  // Apply edits coming FROM the phone (mark done/skip, edit name/notes/fields, delete).
-  // Registered once; uses the stable setItems so it never sees a stale closure.
-  useEffect(() => {
-    if (!window.electron?.onDashboardShotlistCommand) return;
-    window.electron.onDashboardShotlistCommand((cmd) => {
-      if (!cmd || !cmd.id) return;
-      if (cmd.action === 'delete') {
-        setItems(prev => prev.filter(it => it.id !== cmd.id));
-        return;
-      }
-      if (cmd.patch && typeof cmd.patch === 'object') {
-        setItems(prev => prev.map(it => (it.id === cmd.id ? { ...it, ...cmd.patch } : it)));
-      }
-    });
-    return () => { window.electron?.offDashboardShotlistCommand?.(); };
-  }, []);
 
   // Checked pilots are "in scope" — this is the working set used for the exports.
   const scopedItems = useMemo(
@@ -637,6 +621,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
                               </span>
                               {it.manual && <span className="text-[9px] font-black text-cyan-300 bg-cyan-400/10 px-2 py-0.5 rounded uppercase tracking-wider">added</span>}
                               {it.status === 'skipped' && <span className="text-[9px] font-black text-rose-400 bg-rose-500/20 px-2 py-0.5 rounded uppercase tracking-wider">Skipped</span>}
+                              {it.takes && <span className="text-[9px] font-black text-cyan-300 bg-cyan-400/10 px-2 py-0.5 rounded uppercase tracking-wider">🎬 {it.takes} take{it.takes === '1' ? '' : 's'}</span>}
                             </div>
                             <p className="text-xs font-mono text-slate-400 mt-1">
                               {[it.stage, it.setTime && `Set ${it.setTime}`, it.flyTime && `Fly ${it.flyTime}`, it.dropTime && `Drop ${it.dropTime}`].filter(Boolean).join('  ·  ') || 'no stage / times'}

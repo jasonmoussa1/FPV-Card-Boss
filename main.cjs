@@ -68,6 +68,10 @@ const REPORTABLE_FIELDS = new Set([
 // and served to the phone at GET /shotlist for view-only browsing.
 let shotlist = [];
 
+// Simple password that gates the phone's "Move Files" section. Set on the desktop
+// (shown in plain text), saved in dashboard-config.json. Empty = section is open.
+let movePassword = '';
+
 // Active job context — main keeps its OWN copy so it can move files (auto / from
 // the phone) without depending on the renderer's React state.
 let activeJob = null;     // { stabilizedFolder, videosFolder, robotStartTime, expectedCount, cardId, pilotName, artistName }
@@ -82,13 +86,14 @@ function loadDashboardConfig() {
       const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
       if (typeof cfg.port === 'number' && cfg.port > 0 && cfg.port < 65536) dashboardPort = cfg.port;
       if (cfg.moveMode === 'auto' || cfg.moveMode === 'manual') status.moveMode = cfg.moveMode;
+      if (typeof cfg.movePassword === 'string') movePassword = cfg.movePassword;
     }
   } catch {}
 }
 function saveDashboardConfig() {
   try {
     const p = dashboardConfigPath();
-    if (p) fs.writeFileSync(p, JSON.stringify({ port: dashboardPort, moveMode: status.moveMode }, null, 2), 'utf8');
+    if (p) fs.writeFileSync(p, JSON.stringify({ port: dashboardPort, moveMode: status.moveMode, movePassword }, null, 2), 'utf8');
   } catch {}
 }
 
@@ -154,10 +159,13 @@ app.whenReady().then(() => {
     onCommand: (cmd) => forwardToRenderer(cmd),
     getSnapshot: () => status,
     getShotlist: () => shotlist,
-    // Phone shot-list edit → desktop ShotListPanel (which owns the data + localStorage).
-    onShotlistCommand: (cmd) => {
+    // Move-files section gate: returns whether a password is required, and validates.
+    isMoveLocked: () => movePassword.length > 0,
+    checkMovePassword: (pw) => movePassword.length === 0 || String(pw) === movePassword,
+    // Phone alert (e.g. a shot was completed on mobile) → desktop dings + toasts.
+    onNotify: (n) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        try { mainWindow.webContents.send('dashboard-shotlist-command', cmd); } catch {}
+        try { mainWindow.webContents.send('dashboard-notify', n); } catch {}
       }
     },
   });
@@ -1023,7 +1031,13 @@ ipcMain.handle('move-stabilized-files', async (_event, { videosFolder, stabilize
 // ── Dashboard control IPC (desktop Setup panel) ──────────────────────────────
 ipcMain.handle('dashboard-get-info', () => {
   const info = dashboard ? dashboard.getInfo() : { port: dashboardPort, running: false, urls: [] };
-  return { ...info, moveMode: status.moveMode };
+  return { ...info, moveMode: status.moveMode, movePassword };
+});
+// Desktop sets the simple Move-Files password (shown in plain text on the desktop).
+ipcMain.handle('dashboard-set-move-password', (_event, pw) => {
+  movePassword = typeof pw === 'string' ? pw : '';
+  saveDashboardConfig();
+  return { ok: true, movePassword };
 });
 // The desktop renderer pushes its live delivery state (which destinations are
 // available + their copy/dump progress) so the phone's buttons mirror the desktop.
@@ -1052,6 +1066,7 @@ ipcMain.handle('dashboard-report-shotlist', (_event, items) => {
     dropTime: String(it.dropTime || ''),
     notes: String(it.notes || ''),
     status: String(it.status || 'pending'),
+    takes: String(it.takes || ''),
   }));
   return { ok: true };
 });

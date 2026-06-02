@@ -28,6 +28,7 @@ export interface ShotListItem {
   notes: string;       // editable; seeded from CSV NOTES
   status: ShotStatus;
   manual: boolean;     // true if added by hand in-app (not from CSV)
+  takes?: string;      // take count synced back from the mobile slate
 }
 
 export interface PilotConfig {
