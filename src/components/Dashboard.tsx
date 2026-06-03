@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { extractFpvAssignments } from '../utils/csvParser';
 import {
   FpvConfig,
@@ -45,6 +45,8 @@ import {
 } from 'lucide-react';
 import ShotListPanel from './ShotListPanel';
 import HelpButton from './HelpButton';
+import UserManual from './UserManual';
+import PhoneAccessPanel from './PhoneAccessPanel';
 
 function cleanFolderName(input: string): string {
   if (!input) return "";
@@ -167,6 +169,18 @@ export default function Dashboard() {
     try { return saved ? JSON.parse(saved) : []; } catch (e) { return []; }
   });
 
+  // A shot's status changed in the shot list (here or from the phone). Keep the
+  // card queue's skip list in sync so a shot skipped in the list won't come back
+  // as the "next card" — and an un-skip restores it.
+  const handleShotStatusChange = useCallback((info: { assignment: string; pilot: string; daySection: string; status: string }) => {
+    const key = `${info.daySection}|${info.pilot}|${info.assignment}`;
+    setSkippedAssignments(prev => {
+      const has = prev.includes(key);
+      if (info.status === 'skipped') return has ? prev : [...prev, key];
+      return has ? prev.filter(k => k !== key) : prev; // pending/completed → un-skip
+    });
+  }, []);
+
   const [customAssignmentOverride, setCustomAssignmentOverride] = useState<string>('');
   const [isSetupOpen, setIsSetupOpen] = useState<boolean>(false);
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
@@ -175,14 +189,15 @@ export default function Dashboard() {
 
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [isShotListOpen, setIsShotListOpen] = useState<boolean>(false);
-  const [dashboardInfo, setDashboardInfo] = useState<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual' } | null>(null);
+  const [isManualOpen, setIsManualOpen] = useState<boolean>(false);
+  const [dashboardInfo, setDashboardInfo] = useState<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; tailscaleHttpsUrl?: string } | null>(null);
   // AUTO / MANUAL mode (mirrors main.cjs's moveMode; settable from desktop or phone).
   const [moveMode, setMoveMode] = useState<'auto' | 'manual'>('manual');
   // Auto-chain (move → media → bella → dump → complete) progress for the desktop UI.
   const [autoChainStatus, setAutoChainStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [autoChainStep, setAutoChainStep] = useState<string>('');
-  // Toast shown when the phone marks a computer-linked shot complete (with a ding).
-  const [mobileToast, setMobileToast] = useState<string>('');
+  // Red blinking-light alerts shown when the phone marks a shot done/skipped.
+  const [mobileAlerts, setMobileAlerts] = useState<{ id: number; name: string; status: string }[]>([]);
   const [dashboardPortInput, setDashboardPortInput] = useState<string>('8723');
   const [movePasswordInput, setMovePasswordInput] = useState<string>('');
   const [historyPilotFilter, setHistoryPilotFilter] = useState<string>('ALL');
@@ -422,8 +437,9 @@ export default function Dashboard() {
     })();
   }, []);
 
-  // Phone marked a computer-linked shot complete → ding + toast so the operator
-  // knows that footage is about to be sent over.
+  // Phone marked a shot done/skipped → ding + a RED blinking-light alert so the
+  // operator knows that artist's footage is completed (or skipped) and coming over.
+  // Alerts stay until dismissed.
   useEffect(() => {
     window.electron?.onDashboardNotify?.((n) => {
       try {
@@ -439,13 +455,14 @@ export default function Dashboard() {
         };
         ctx.resume?.();
         beep(880, 0); beep(1175, 0.18);
-      } catch { /* audio blocked — toast still shows */ }
+      } catch { /* audio blocked — the light still shows */ }
       const name = n && n.name ? n.name : 'A shot';
-      setMobileToast(`✅ “${name}” marked complete on mobile — footage incoming`);
-      setTimeout(() => setMobileToast(''), 9000);
+      const status = n && n.status === 'skipped' ? 'skipped' : 'completed';
+      setMobileAlerts(prev => [...prev, { id: Date.now() + Math.random(), name, status }]);
     });
     return () => { window.electron?.offDashboardNotify?.(); };
   }, []);
+  const dismissAlert = (id: number) => setMobileAlerts(prev => prev.filter(a => a.id !== id));
 
   // Keep the desktop AUTO/MANUAL button in sync with live changes (e.g. toggled
   // from the phone). main.cjs pushes the full status object on every change.
@@ -512,13 +529,16 @@ export default function Dashboard() {
       if (a.daySection !== selectedDaySection) return false;
       if (a.pilot !== selectedPilot) return false;
 
-      const isAlreadyCompleted = history.some(
-        h => h.assignment.toUpperCase() === a.assignment.toUpperCase() &&
+      // Exclude anything already handled for this day/pilot — whether it was
+      // COMPLETED or SKIPPED. (Previously only the skip-key list was checked, so a
+      // skipped shot could reappear after completing the next card.)
+      const isAlreadyHandled = history.some(
+        h => h.assignment.toUpperCase().trim() === a.assignment.toUpperCase().trim() &&
              h.daySection === selectedDaySection &&
              h.pilot === selectedPilot &&
-             h.status === 'Complete'
+             (h.status === 'Complete' || h.status === 'Skip')
       );
-      if (isAlreadyCompleted) return false;
+      if (isAlreadyHandled) return false;
 
       const isSkipped = skippedAssignments.includes(`${a.daySection}|${a.pilot}|${a.assignment}`);
       if (isSkipped) return false;
@@ -1074,11 +1094,8 @@ export default function Dashboard() {
         if (!(await handleCopyToBellaDrive())) { fail('Copy to Bella Drive failed.'); return; }
       }
 
-      if (config.autoDumpRaws) {
-        if (!config.rawDumpPath?.trim()) { fail('Raw dump is turned on for Auto mode but no Raw Dump Folder is set in Setup.'); return; }
-        setAutoChainStep('Dumping raws…');
-        if (!(await handleDumpRaws())) { fail('Raw dump failed.'); return; }
-      }
+      // NOTE: Raw dump is intentionally NOT part of Auto mode — dumping raws is
+      // always a deliberate, manual click (desktop or phone "Dump Raws" button).
 
       setAutoChainStep('Completing card & advancing…');
       handleCompleteCardConfirmed();
@@ -1100,6 +1117,59 @@ export default function Dashboard() {
     // Intentionally keyed on the export-complete transition only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goProExportStatus]);
+
+  // Phone "⚡ Auto · Send to All": ONE action that moves the files and copies to
+  // every ready drive (Media + Bella). NO raw dump, and it does NOT complete the
+  // card — those stay deliberate. Stops + reports if a step fails.
+  const deliverAllRunningRef = useRef(false);
+  const runDeliverAll = async () => {
+    if (deliverAllRunningRef.current) return;
+    deliverAllRunningRef.current = true;
+    const report = (msg: string) => { try { window.electron?.dashboardReportState({ lastActivity: msg }); } catch {} };
+    try {
+      report('Auto delivery: moving files…');
+      if (moveExportsStatus !== 'success') {
+        if (!(await handleMoveExports())) { report('Auto delivery stopped: move to STABILIZED failed.'); return; }
+      }
+      if (mediaToggleOn && mediaDriveCopyStatus !== 'success') {
+        report('Auto delivery: copying to Media Drive…');
+        if (!(await handleCopyToMediaDrive())) { report('Auto delivery stopped: Copy to Media failed.'); return; }
+      }
+      if (bellaToggleOn && bellaArtistOk && bellaDriveCopyStatus !== 'success') {
+        report('Auto delivery: copying to Bella Drive…');
+        if (!(await handleCopyToBellaDrive())) { report('Auto delivery stopped: Copy to Bella failed.'); return; }
+      }
+      report('Auto delivery done — files moved & copied to all drives.');
+    } finally {
+      deliverAllRunningRef.current = false;
+    }
+  };
+
+  // Phone "Delete SD Card": same as the desktop delete but WITHOUT the desktop
+  // confirm popup (the phone shows its own confirmation), so it can run remotely.
+  const handleDeleteSdConfirmed = async () => {
+    const sdPath = config.sdCardDrive?.trim();
+    if (!sdPath) { setSdDeleteError('No SD Card Drive is set in Setup.'); setSdDeleteStatus('error'); return; }
+    setSdDeleteStatus('deleting');
+    setSdDeleteError(null);
+    setSdDeleteResult(null);
+    try {
+      const result = await deleteSdRawFiles({
+        sdDrivePath: sdPath,
+        protectedRoots: [config.localRootPath, config.mediaRootPath, config.bellaRootPath],
+      });
+      if (result?.success) {
+        setSdDeleteResult({ deletedCount: result.deletedCount ?? 0, freedGB: result.freedGB ?? '0.00' });
+        setSdDeleteStatus('success');
+      } else {
+        setSdDeleteError(result?.message ?? 'Unknown error deleting SD card files.');
+        setSdDeleteStatus('error');
+      }
+    } catch (err: unknown) {
+      setSdDeleteError(String(err));
+      setSdDeleteStatus('error');
+    }
+  };
 
   const applyDashboardPort = async () => {
     const p = parseInt(dashboardPortInput, 10);
@@ -1448,6 +1518,8 @@ export default function Dashboard() {
     copyBella: isSimpleMode ? handleSimpleCopyToBellaDrive : handleCopyToBellaDrive,
     dumpRaws: handleDumpRaws,
     completeCard: handleCompleteCardConfirmed,
+    deliverAll: runDeliverAll,
+    deleteSd: handleDeleteSdConfirmed,
   };
 
   useEffect(() => {
@@ -1467,11 +1539,14 @@ export default function Dashboard() {
   const bellaAvailable = bellaToggleOn && moveDone && bellaArtistOk;
   const dumpAvailable = !isSimpleMode && !!selectedPilot && !!config.rawDumpPath?.trim();
   const completeAvailable = !isSimpleMode && activeAssignmentName !== 'NO ASSIGNMENTS IN QUEUE';
+  // Delete SD card is only allowed AFTER the raws have been backed up (dumped).
+  const deleteSdAvailable = !isSimpleMode && dumpRawsStatus === 'success' && !!config.sdCardDrive?.trim();
   // Short reasons shown under each greyed-out button on the phone.
   const mediaHint = mediaAvailable ? '' : (!mediaToggleOn ? 'Media Drive is turned off in Setup' : 'Move files to STABILIZED first');
   const bellaHint = bellaAvailable ? '' : (!bellaToggleOn ? 'Bella Drive is turned off in Setup' : !moveDone ? 'Move files to STABILIZED first' : 'Assign an artist to this card first');
   const dumpHint = dumpAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : !selectedPilot ? 'Select a pilot first' : 'Set a Raw Dump Folder in Setup');
   const completeHint = completeAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : 'Assign a card/shot first');
+  const deleteSdHint = deleteSdAvailable ? '' : (isSimpleMode ? 'Available in Festival (GoPro batch) mode' : !config.sdCardDrive?.trim() ? 'Set an SD Card Drive in Setup' : 'Dump the raws first (back them up)');
   // Derive the single workflow state the phone shows (idle / running / complete /
   // error) from the desktop's three lifecycle machines. This is the field that was
   // missing before — without it the phone's status + Move Files button never left
@@ -1509,6 +1584,11 @@ export default function Dashboard() {
       dumpHint,
       completeAvailable,
       completeHint,
+      // Delete SD card (festival; only after raws are backed up).
+      deleteSdAvailable,
+      deleteSdState: sdDeleteStatus,
+      deleteSdHint,
+      deleteSdDest: config.sdCardDrive?.trim() || '',
     });
   }, [
     isSimpleMode, mediaAvailable, bellaAvailable, dumpAvailable, completeAvailable,
@@ -1516,6 +1596,7 @@ export default function Dashboard() {
     mediaDriveCopyStatus, bellaDriveCopyStatus, dumpRawsStatus,
     destinationMediaDrivePath, destinationBellaSocialPath, simpleMediaPath, simpleBellaPath,
     config.rawDumpPath,
+    deleteSdAvailable, deleteSdHint, sdDeleteStatus, config.sdCardDrive,
     // Workflow status + context so the phone updates the moment the desktop does.
     workflowState, currentCardId, selectedPilot, activeAssignmentName,
     goProExportProgress, moveExportsResult,
@@ -1524,10 +1605,30 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen text-white flex flex-col font-sans border-none" id="fpv-boss-body">
 
-      {/* Mobile shot-complete ding toast */}
-      {mobileToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl bg-emerald-500 text-slate-950 font-black text-sm shadow-[0_10px_40px_rgba(16,185,129,0.5)] border border-emerald-300 animate-pulse cursor-pointer" onClick={() => setMobileToast('')}>
-          {mobileToast}
+      {/* Mobile shot done/skipped — red blinking-light alerts (stay until dismissed) */}
+      {mobileAlerts.length > 0 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[min(92vw,520px)]">
+          {mobileAlerts.map(a => {
+            const skipped = a.status === 'skipped';
+            return (
+              <div
+                key={a.id}
+                onClick={() => dismissAlert(a.id)}
+                className={`flex items-center gap-3 px-5 py-3 rounded-2xl font-black text-sm cursor-pointer border-2 shadow-2xl ${
+                  skipped
+                    ? 'bg-amber-500/95 text-slate-950 border-amber-200'
+                    : 'bg-rose-600 text-white border-rose-300 animate-pulse shadow-[0_0_30px_rgba(244,63,94,0.8)]'
+                }`}
+                title="Click to dismiss"
+              >
+                <span className={`shrink-0 w-4 h-4 rounded-full ${skipped ? 'bg-slate-900' : 'bg-white animate-ping'}`} />
+                <span className="flex-grow">
+                  {skipped ? '⚠ ' : '🔴 '}“{a.name}” {skipped ? 'SKIPPED' : 'DONE'} on mobile{skipped ? '' : ' — footage incoming'}
+                </span>
+                <span className="shrink-0 text-xs opacity-70">✕</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1546,6 +1647,13 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => setIsManualOpen(true)}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl border border-cyan-400/40 bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-300 text-base font-black transition"
+            title="How to set up and use FPV Card Boss"
+          >
+            📖 <span>Manual</span>
+          </button>
           <label className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-base font-black cursor-pointer transition">
             <Upload className="w-5 h-5" />
             <span>Import CSV</span>
@@ -2049,22 +2157,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="space-y-1.5 bg-slate-950 rounded-xl p-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Open on your phone</p>
-                {dashboardInfo && dashboardInfo.urls.length > 0 ? (
-                  dashboardInfo.urls.map((u, i) => (
-                    <div key={i} className="flex items-center gap-3 flex-wrap">
-                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${u.label.startsWith('Tailscale') ? 'bg-violet-500/15 text-violet-400' : 'bg-cyan-400/10 text-cyan-400'}`}>
-                        {u.label}
-                      </span>
-                      <code className="text-sm font-mono text-cyan-400 break-all select-all">{u.url}</code>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-slate-500 italic">No LAN/Tailscale address detected yet — connect to Wi-Fi (or start Tailscale) and reopen Setup.</p>
-                )}
-                <p className="text-[10px] font-mono text-slate-600 mt-1">Completion mode (set here or from the phone): <span className={moveMode === 'auto' ? 'text-emerald-400' : 'text-cyan-400'}>{moveMode.toUpperCase()}</span></p>
-              </div>
+              <PhoneAccessPanel httpsUrl={dashboardInfo?.tailscaleHttpsUrl} urls={dashboardInfo?.urls ?? []} />
+              <p className="text-[10px] font-mono text-slate-600 mt-1 px-1">Completion mode (set here or from the phone): <span className={moveMode === 'auto' ? 'text-emerald-400' : 'text-cyan-400'}>{moveMode.toUpperCase()}</span></p>
             </div>
           </div>
         )}
@@ -2928,19 +3022,8 @@ export default function Dashboard() {
                   {moveMode === 'auto' ? (
                     <div className="space-y-2">
                       <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                        When an export finishes, files auto-move to STABILIZED{mediaToggleOn ? ', Media' : ''}{bellaToggleOn ? ', Bella' : ''}{config.autoDumpRaws ? ', Raw dump' : ''}, then the card auto-completes and advances — no clicks. Stops &amp; alerts if any step fails (card stays open).
+                        When an export finishes, files auto-move to STABILIZED{mediaToggleOn ? ', Media' : ''}{bellaToggleOn ? ', Bella' : ''}, then the card auto-completes and advances — no clicks. Stops &amp; alerts if any step fails (card stays open). <span className="text-slate-400">Dumping raws is always a separate, manual click.</span>
                       </p>
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={!!config.autoDumpRaws}
-                          onChange={(e) => setConfig(prev => ({ ...prev, autoDumpRaws: e.target.checked }))}
-                          className="w-4 h-4 accent-cyan-500"
-                        />
-                        <span className="text-xs font-bold text-slate-300">
-                          Include Raw dump in Auto{config.rawDumpPath?.trim() ? '' : ' (set a Raw Dump Folder in Setup first)'}
-                        </span>
-                      </label>
                     </div>
                   ) : (
                     <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -3982,7 +4065,10 @@ export default function Dashboard() {
         onClose={() => setIsShotListOpen(false)}
         assignments={allAssignments}
         pilots={pilots}
+        onShotStatusChange={handleShotStatusChange}
       />
+
+      <UserManual isOpen={isManualOpen} onClose={() => setIsManualOpen(false)} />
 
     </div>
   );

@@ -46,7 +46,7 @@ function detectUrls(port) {
 // returned by /state so we can confirm the phone is loading the FRESH page (not a
 // stale service-worker cache). If the phone footer shows an older stamp, its PWA
 // cache is stale → remove/re-add the app or clear site data.
-const PAGE_BUILD = 'pwa-2026-06-02-p-clean';
+const PAGE_BUILD = 'pwa-2026-06-02-y-notes-sync';
 // When this server process started — proves the phone is talking to a fresh run.
 const SERVER_STARTED = new Date().toISOString();
 
@@ -87,17 +87,24 @@ const MANIFEST = JSON.stringify({
   ],
 });
 
-// Offline-capable service worker so the Shot List & Slate open even when the
-// computer is OFF. It is NETWORK-FIRST for the shell pages (always fresh when the
-// computer is reachable, cache only as offline fallback) and does NOT touch the
-// live data endpoints (/state, /shotlist, /cmd, /unlock, …) — those are network-
-// only, so there is never a stale-data trap. Cache name is tied to PAGE_BUILD so a
-// new build replaces the old cache.
+// Offline-FIRST service worker so the Shot List & Slate open instantly whether or
+// not the computer is running. The shell pages (/, /slate, icons, manifest) are
+// served CACHE-FIRST (instant, even with the computer off) and refreshed in the
+// background when the computer is reachable. Live data endpoints (/state, /shotlist,
+// /cmd, /unlock, …) are never cached, so there is no stale-data trap. The cache name
+// is tied to PAGE_BUILD so a new build replaces the old cache on next online visit.
 const SERVICE_WORKER = `
 const SHELL = 'fpvcb-${PAGE_BUILD}';
 const SHELL_ASSETS = ['/', '/slate', '/icon-192.png', '/icon-512.png', '/manifest.webmanifest'];
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_ASSETS).catch(() => {})).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(SHELL);
+    // Cache each asset individually so one failure can't wipe out the whole precache.
+    await Promise.all(SHELL_ASSETS.map(async (u) => {
+      try { const r = await fetch(u, { cache: 'no-store' }); if (r && r.ok) await c.put(u, r.clone()); } catch (err) {}
+    }));
+    await self.skipWaiting();
+  })());
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -108,15 +115,17 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   const isShell = url.pathname === '/' || url.pathname === '/slate' || SHELL_ASSETS.includes(url.pathname);
-  if (!isShell) return; // live endpoints: straight to network, never cached
-  // Network-first: fresh when online, cached copy only when the network fails.
-  e.respondWith(
-    fetch(e.request).then((res) => {
-      const copy = res.clone();
-      caches.open(SHELL).then((c) => c.put(e.request, copy)).catch(() => {});
+  if (!isShell) return; // live endpoints: network-only, never cached
+  e.respondWith((async () => {
+    const cached = await caches.match(e.request);
+    // Refresh the cached copy in the background when the computer is reachable.
+    const network = fetch(e.request).then((res) => {
+      if (res && res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(e.request, copy)).catch(() => {}); }
       return res;
-    }).catch(() => caches.match(e.request).then((r) => r || caches.match('/')))
-  );
+    }).catch(() => null);
+    // Cache-first: instant when cached; otherwise wait for the network; last resort '/'.
+    return cached || (await network) || (await caches.match('/'));
+  })());
 });
 `;
 
@@ -159,7 +168,7 @@ const PAGE = `<!DOCTYPE html>
   .conn{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 10px var(--red);}
   .dot.on{background:var(--green);box-shadow:0 0 10px var(--green);}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;backdrop-filter:blur(16px);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);}
   .label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:800;}
   .big{font-size:30px;font-weight:900;letter-spacing:1px;margin-top:2px;word-break:break-word;}
   .row{display:flex;justify-content:space-between;gap:12px;}
@@ -193,6 +202,7 @@ const PAGE = `<!DOCTYPE html>
   .act.media{border-color:rgba(255,176,32,.35);} .act.media .t{color:var(--amber);}
   .act.bella{border-color:rgba(180,79,255,.35);} .act.bella .t{color:var(--purple);}
   .act.dump{border-color:rgba(0,229,255,.30);} .act.dump .t{color:var(--cyan);}
+  .act.delsd{border-color:rgba(255,92,124,.4);background:rgba(255,92,124,.06);} .act.delsd .t{color:var(--red);}
   .act.busy{box-shadow:0 0 0 1px var(--cyan) inset;}
   .act.done{border-color:rgba(0,255,136,.4);} .act.done .t{color:var(--green);}
   .act.complete{align-items:center;padding:20px;border:0;background:linear-gradient(135deg,var(--green),#00cc6a);color:#04210f;box-shadow:0 8px 30px rgba(0,255,136,.25);}
@@ -258,7 +268,7 @@ const PAGE = `<!DOCTYPE html>
       </button>
       <button class="homecard move" onclick="openMove()">
         <span class="hc-ic">🔒</span>
-        <span class="hc-tx"><span class="hc-t">Move Files / Stabilizer</span><span class="hc-d">Live status &amp; file delivery. Password required.</span></span>
+        <span class="hc-tx"><span class="hc-t">Move Files / Stabilizer</span><span class="hc-d">Live status &amp; file delivery. Needs the computer running · password required.</span></span>
       </button>
     </div>
 
@@ -279,16 +289,15 @@ const PAGE = `<!DOCTYPE html>
         <div class="bar"><i id="barFill"></i></div>
         <div class="sub" id="progress">Waiting for a job…</div>
       </div>
-      <div>
-        <div class="label" style="margin:10px 0 6px">Move Mode</div>
-        <div class="toggle">
-          <button id="mAuto" onclick="setMode('auto')">Auto</button>
-          <button id="mManual" onclick="setMode('manual')">Manual</button>
-        </div>
-      </div>
       <button class="move" id="moveBtn" disabled onclick="doMove()" style="margin-top:12px">Move Files</button>
       <div class="bhint" id="moveHint"></div>
-      <div class="label" style="margin-top:6px">Deliver To</div>
+
+      <div class="label" style="margin-top:10px">Deliver To</div>
+      <div class="toggle" style="margin:6px 0 2px">
+        <button id="dManual" onclick="setDeliverMode('manual')">Manual</button>
+        <button id="dAuto" onclick="setDeliverMode('auto')">⚡ Auto · Send to All</button>
+      </div>
+      <div class="bhint" id="deliverHint" style="color:var(--muted)">Manual: tap each delivery below. Auto: sends to every ready location at once (you still complete the card).</div>
       <div class="deliv">
         <button class="act media" id="mediaBtn" disabled onclick="send({cmd:'copyMedia'})">
           <span class="t" id="mediaT">Copy to Media Drive</span><span class="d" id="mediaD">RAW + STABILIZED</span>
@@ -301,6 +310,9 @@ const PAGE = `<!DOCTYPE html>
         </button>
         <button class="act complete" id="completeBtn" disabled onclick="doComplete()">
           <span class="t" id="completeT">🚀 Complete Card &amp; Shift to Next</span><span class="d" id="completeD"></span>
+        </button>
+        <button class="act delsd" id="delSdBtn" disabled onclick="doDeleteSd()">
+          <span class="t" id="delSdT">🗑 Delete SD Card</span><span class="d" id="delSdD">After raws are backed up</span>
         </button>
       </div>
       <div class="activity" id="activity"></div>
@@ -317,8 +329,8 @@ const PAGE = `<!DOCTYPE html>
       <div id="slAddForm" style="display:none"></div>
       <div id="slCsvForm" style="display:none"></div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <select id="slPilot" class="slsel" onchange="renderShotlist()"></select>
-        <select id="slDay" class="slsel" onchange="renderShotlist()"></select>
+        <select id="slPilot" class="slsel" onchange="slFilterChanged()"></select>
+        <select id="slDay" class="slsel" onchange="slFilterChanged()"></select>
       </div>
       <div class="sub" id="slSummary" style="margin-top:10px"></div>
       <div id="slList"></div>
@@ -341,7 +353,7 @@ const PAGE = `<!DOCTYPE html>
   // network even when WebSocket frames don't arrive on the phone). ──
   function poll(){
     fetch('/state',{cache:'no-store'}).then(function(r){ return r.json(); })
-      .then(function(d){ applyStatus(d.status); })
+      .then(function(d){ applyStatus(d.status); flushQueue(); })
       .catch(function(){ if(Date.now()-lastOk>5000) setConn(false); });
   }
 
@@ -366,7 +378,19 @@ const PAGE = `<!DOCTYPE html>
       .then(function(){ setTimeout(poll,150); })
       .catch(function(){});
   }
-  function setMode(mode){ send({cmd:'setMode',mode:mode}); }
+  // ── DELIVERY MODE (phone Move Files section) ──
+  // Manual (default): tap each Deliver To location yourself. Auto: one tap fires
+  // every ready delivery at once. Card completion is ALWAYS a manual tap. Starts
+  // on Manual so nothing fires unexpectedly.
+  var deliverMode='manual';
+  function paintDeliverMode(){ if(el('dManual')) el('dManual').classList.toggle('active', deliverMode==='manual'); if(el('dAuto')) el('dAuto').classList.toggle('active', deliverMode==='auto'); }
+  function setDeliverMode(m){
+    if(m!=='auto'){ deliverMode='manual'; paintDeliverMode(); if(el('deliverHint')) el('deliverHint').textContent='Manual: tap each delivery below yourself.'; return; }
+    if(!confirm('Auto-deliver this card now?\\n\\nThis MOVES the files and copies to every set-up drive (Media + Bella) in one go.\\n\\nRaws and completing the card stay separate (you do those yourself).')) return;
+    deliverMode='auto'; paintDeliverMode();
+    send({cmd:'deliverAll'}); // ONE command — the computer does move → Media → Bella
+    if(el('deliverHint')) el('deliverHint').textContent='⚡ Auto: moving & copying to all drives…';
+  }
   function doMove(){
     var s=appStatus.state;
     if(s==='error' || mismatch()){ if(!confirm('File count looks off or the export errored. Move the files anyway?')) return; }
@@ -376,6 +400,11 @@ const PAGE = `<!DOCTYPE html>
   function doComplete(){
     if(!confirm('Complete the current card and shift to the next one?')) return;
     send({cmd:'completeCard'});
+  }
+  function doDeleteSd(){
+    if(!appStatus.deleteSdAvailable) return;
+    if(!confirm('Permanently DELETE all GoPro footage from the SD card'+(appStatus.deleteSdDest?(' ('+appStatus.deleteSdDest+')'):'')+'?\\n\\nThis cannot be undone. Only do this AFTER the files are moved, delivered, and the raws are backed up.')) return;
+    send({cmd:'deleteSd'});
   }
 
   // Wire one delivery button to its reported availability + progress state.
@@ -407,10 +436,6 @@ const PAGE = `<!DOCTYPE html>
     var cl = appStatus.countLabel || (ec>0? (fc+' of '+ec+' files') : (fc?fc+' file(s)':'—'));
     el('progress').textContent = cl + ' · ' + fmtMB(appStatus.totalSizeMB||0);
 
-    // Mode toggle
-    el('mAuto').classList.toggle('active', appStatus.moveMode==='auto');
-    el('mManual').classList.toggle('active', appStatus.moveMode!=='auto');
-
     // Move button: enabled when complete or on error/mismatch (with confirm)
     var btn=el('moveBtn');
     var canMove = (st==='complete' || st==='error');
@@ -430,6 +455,13 @@ const PAGE = `<!DOCTYPE html>
     el('completeBtn').disabled = !appStatus.completeAvailable;
     el('completeD').textContent = appStatus.completeAvailable ? '' : (appStatus.completeHint || '');
 
+    var dst=appStatus.deleteSdState;
+    el('delSdBtn').disabled = !appStatus.deleteSdAvailable || dst==='deleting';
+    el('delSdBtn').classList.toggle('busy', dst==='deleting');
+    el('delSdBtn').classList.toggle('done', dst==='success');
+    el('delSdT').textContent = dst==='deleting'?'Deleting SD card…':dst==='success'?'✓ SD card cleared':dst==='error'?'Delete failed — tap to retry':'🗑 Delete SD Card';
+    el('delSdD').textContent = appStatus.deleteSdAvailable ? (appStatus.deleteSdDest||'') : (appStatus.deleteSdHint||'After raws are backed up');
+
     el('activity').textContent = appStatus.lastActivity || '';
   }
 
@@ -440,7 +472,7 @@ const PAGE = `<!DOCTYPE html>
   function showHome(){ el('home').style.display='flex'; el('slPanel').style.display='none'; el('movePanel').style.display='none'; slEditId=null; setView('home'); }
   function openShotList(){ el('home').style.display='none'; el('movePanel').style.display='none'; el('slPanel').style.display='block'; setView('shots'); loadShots(); renderShotlist(); }
   // Move Files is password-gated; the password is set on the computer.
-  function revealMove(){ el('home').style.display='none'; el('slPanel').style.display='none'; el('movePanel').style.display='block'; setView('move'); poll(); }
+  function revealMove(){ el('home').style.display='none'; el('slPanel').style.display='none'; el('movePanel').style.display='block'; setView('move'); deliverMode='manual'; paintDeliverMode(); poll(); }
   function openMove(){
     if(sessionStorage.getItem('fpvcb_unlocked')==='1'){ revealMove(); return; }
     fetch('/lock',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
@@ -466,15 +498,23 @@ const PAGE = `<!DOCTYPE html>
   function loadShots(){ try{ shotItems=JSON.parse(localStorage.getItem(SHOT_KEY)||'[]')||[]; }catch(e){ shotItems=[]; } populateShotFilters(); }
   function saveShots(){ try{ localStorage.setItem(SHOT_KEY, JSON.stringify(shotItems)); }catch(e){} }
 
+  // The chosen pilot + day are remembered (localStorage) so backing out, opening the
+  // slate, or closing the app brings you right back to YOUR pilot & day — no re-selecting.
+  var FILT_P='fpvcb_filter_pilot', FILT_D='fpvcb_filter_day';
+  function slFilterChanged(){ try{ localStorage.setItem(FILT_P, el('slPilot').value); localStorage.setItem(FILT_D, el('slDay').value); }catch(e){} renderShotlist(); }
   function populateShotFilters(){
     var pilots=[], days=[];
     shotItems.forEach(function(it){ if(it.pilot&&pilots.indexOf(it.pilot)<0)pilots.push(it.pilot); var dd=it.day||''; if(dd&&days.indexOf(dd)<0)days.push(dd); });
-    var ps=el('slPilot'), ds=el('slDay'); var pv=ps.value, dv=ds.value;
+    var ps=el('slPilot'), ds=el('slDay');
+    // Prefer the current on-screen value, else the saved one from a previous session.
+    var wantP=ps.value||''; var wantD=ds.value||'';
+    try{ if(!wantP) wantP=localStorage.getItem(FILT_P)||''; if(!wantD) wantD=localStorage.getItem(FILT_D)||''; }catch(e){}
     ps.style.display = pilots.length>0?'block':'none';
     ds.style.display = days.length>1?'block':'none';
     ps.innerHTML='<option value="ALL">All pilots</option>'+pilots.map(function(p){return '<option value="'+escA(p)+'">'+esc(p)+'</option>';}).join('');
     ds.innerHTML='<option value="ALL">All days</option>'+days.map(function(dd){return '<option value="'+escA(dd)+'">'+esc(dd)+'</option>';}).join('');
-    if(pv) ps.value=pv; if(dv) ds.value=dv;
+    if(wantP && (wantP==='ALL' || pilots.indexOf(wantP)>=0)) ps.value=wantP;
+    if(wantD && (wantD==='ALL' || days.indexOf(wantD)>=0)) ds.value=wantD;
   }
 
   // Add-shot form (artist, stage, festival + optional pilot/day). Keeps stage &
@@ -509,16 +549,24 @@ const PAGE = `<!DOCTYPE html>
     fetch('/shotlist',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
       var items=(d&&d.items)||[];
       if(!items.length){ alert('No shots found on the computer (load a CSV there first).'); return; }
-      var added=0;
+      var added=0, linked=0;
       items.forEach(function(it){
+        var id=it.id||''; if(!id) return;
+        // Already imported this exact computer row? (dedupe by the stable pcId)
+        if(shotItems.some(function(x){ return x.pcId===id; })) return;
         var artist=it.assignment||'', stage=it.stage||'', day=it.daySection||'';
         var key=(artist+'|'+stage+'|'+day).toUpperCase();
-        if(shotItems.some(function(x){ return ((x.artist||'')+'|'+(x.stage||'')+'|'+(x.day||'')).toUpperCase()===key; })) return;
-        shotItems.push({ id:uid(), artist:artist, stage:stage, festival:'', pilot:it.pilot||'', day:day, notes:it.notes||'', status:it.status||'pending', takes:it.takes||'', src:'pc' });
+        // Link ONE not-yet-linked existing phone shot with the same name to this
+        // row (1:1). Each duplicate row links a DIFFERENT phone shot.
+        var ex=null;
+        for(var i=0;i<shotItems.length;i++){ var x=shotItems[i]; if(!x.pcId && ((x.artist||'')+'|'+(x.stage||'')+'|'+(x.day||'')).toUpperCase()===key){ ex=x; break; } }
+        if(ex){ ex.pcId=id; ex.src='pc'; if(!ex.time) ex.time=it.flyTime||''; linked++; return; }
+        // Otherwise add a distinct phone shot linked to this exact computer row.
+        shotItems.push({ id:uid(), pcId:id, artist:artist, stage:stage, festival:'', pilot:it.pilot||'', day:day, time:it.flyTime||'', notes:it.notes||'', status:it.status||'pending', takes:it.takes||'', src:'pc' });
         added++;
       });
       saveShots(); populateShotFilters(); renderShotlist();
-      alert(added+' shot(s) imported from the computer.');
+      alert(added+' new shot(s) imported, '+linked+' linked. Every shot now syncs to the computer 1:1.');
     }).catch(function(){ alert('Couldn’t reach the computer. Make sure the software is open and you’re on the same network.'); });
   }
 
@@ -556,17 +604,61 @@ const PAGE = `<!DOCTYPE html>
     slCsvOpen=false; renderCsvForm();
     alert(rows.length+' shot(s) added from CSV.');
   }
-  // Tell the computer a shot was completed on mobile (ding + toast there).
-  function slNotify(name){ fetch('/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'shotComplete',name:name||''})}).catch(function(){}); }
+  // Status changes to computer-linked shots are QUEUED (in localStorage) and retried
+  // until they reach the computer — so a mark made while briefly off Wi-Fi, or before
+  // Tailscale reconnects on cellular, still syncs when the connection comes back.
+  // Same behavior on iPhone (Safari) and Android.
+  var SYNCQ='fpvcb_syncq', flushing=false;
+  function loadQ(){ try{ return JSON.parse(localStorage.getItem(SYNCQ)||'[]')||[]; }catch(e){ return []; } }
+  function saveQ(q){ try{ localStorage.setItem(SYNCQ, JSON.stringify(q)); }catch(e){} }
+  function pendingCount(){ return loadQ().length; }
+  // Queue a change to a computer-linked shot. Carries the full PATCH (status, notes,
+  // name, etc.) AND match fields, so the computer can find the right row even if its
+  // internal id ever drifts. Retried until it lands (off-Wi-Fi safe).
+  function queueSync(it, patch, notify){
+    if(!it || !it.pcId) return;
+    var match={ assignment:it.artist||'', pilot:it.pilot||'', daySection:it.day||'' };
+    var q=loadQ(); q.push({ pcId:it.pcId, match:match, patch:patch, notify:!!notify, name:it.artist||'' }); saveQ(q);
+    flushQueue();
+  }
+  function flushQueue(){
+    if(flushing) return;
+    var q=loadQ(); if(!q.length) return;
+    flushing=true;
+    var item=q[0];
+    var calls=[ fetch('/shotlist-cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ id:item.pcId, match:item.match, patch:item.patch })}) ];
+    if(item.notify) calls.push(fetch('/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'shot',name:item.name,status:(item.patch&&item.patch.status)||''})}));
+    Promise.all(calls).then(function(ress){
+      if(!ress.every(function(r){ return r&&r.ok; })) throw new Error('not ok');
+      var q2=loadQ(); q2.shift(); saveQ(q2); flushing=false;
+      if(el('slSummary') && el('slPanel').style.display!=='none') renderShotlist();
+      if(q2.length) flushQueue();
+    }).catch(function(){ flushing=false; }); // keep queued; retried on next poll/visibility
+  }
 
   function slApply(id, patch){ shotItems=shotItems.map(function(it){ return it.id===id?Object.assign({},it,patch):it; }); saveShots(); }
-  function slToggleDone(id){ var it=slFind(id); if(!it)return; var done=it.status!=='completed'; slApply(id,{status:done?'completed':'pending'}); if(done && it.src==='pc') slNotify(it.artist); renderShotlist(); }
-  function slToggleSkip(id){ var it=slFind(id); if(!it)return; slApply(id,{status:it.status==='skipped'?'pending':'skipped'}); renderShotlist(); }
+  function slToggleDone(id){
+    var it=slFind(id); if(!it)return;
+    var ns=it.status==='completed'?'pending':'completed';
+    slApply(id,{status:ns});
+    if(it.src==='pc') queueSync(it, {status:ns}, ns==='completed');
+    renderShotlist();
+  }
+  function slToggleSkip(id){
+    var it=slFind(id); if(!it)return;
+    var ns=it.status==='skipped'?'pending':'skipped';
+    slApply(id,{status:ns});
+    if(it.src==='pc') queueSync(it, {status:ns}, ns==='skipped');
+    renderShotlist();
+  }
   function slStartEdit(id){ slEditId=id; renderShotlist(); }
   function slCancelEdit(){ slEditId=null; renderShotlist(); }
   function slSaveEdit(id){
     var g=function(f){ var e=document.getElementById('sle_'+f); return e?e.value:''; };
     slApply(id,{ artist:g('artist'), stage:g('stage'), festival:g('festival'), pilot:g('pilot'), day:g('day'), notes:g('notes') });
+    var u=slFind(id);
+    // Edits (incl. notes) to a computer-linked shot sync to the computer's shot list.
+    if(u && u.src==='pc') queueSync(u, { assignment:u.artist, stage:u.stage, notes:u.notes, pilot:u.pilot, daySection:u.day }, false);
     slEditId=null; populateShotFilters(); renderShotlist();
   }
   function slDeleteItem(id){ if(!confirm('Delete this shot?')) return; shotItems=shotItems.filter(function(it){return it.id!==id;}); saveShots(); slEditId=null; populateShotFilters(); renderShotlist(); }
@@ -592,7 +684,8 @@ const PAGE = `<!DOCTYPE html>
     var p=el('slPilot').value||'ALL', dsel=el('slDay').value||'ALL';
     var rows=shotItems.filter(function(it){ return (p==='ALL'||it.pilot===p) && (dsel==='ALL'||(it.day||'')===dsel); });
     var done=0,skip=0; rows.forEach(function(r){ if(r.status==='completed')done++; else if(r.status==='skipped')skip++; });
-    el('slSummary').textContent = shotItems.length ? (rows.length+' shots · '+done+' done · '+skip+' skipped · '+(rows.length-done-skip)+' pending') : '';
+    var pend=pendingCount();
+    el('slSummary').textContent = shotItems.length ? (rows.length+' shots · '+done+' done · '+skip+' skipped · '+(rows.length-done-skip)+' pending'+(pend>0?'  ·  ⏳ '+pend+' waiting to sync to computer':'')) : '';
     var html='', curDay=null;
     rows.forEach(function(it){
       var day=it.day||'';
@@ -600,7 +693,7 @@ const PAGE = `<!DOCTYPE html>
       if(it.id===slEditId){ html+=slEditForm(it); return; }
       var cls=it.status==='completed'?'slitem done':it.status==='skipped'?'slitem skip':'slitem';
       var badge=it.status==='completed'?'<span class="slbadge" style="background:rgba(0,255,136,.15);color:var(--green)">✓ done</span>':it.status==='skipped'?'<span class="slbadge" style="background:rgba(255,92,124,.2);color:var(--red)">skipped</span>':'<span class="slbadge" style="background:rgba(255,255,255,.08);color:var(--muted)">pending</span>';
-      var meta=[it.stage, it.festival].filter(Boolean).map(esc).join(' · ');
+      var meta=[it.stage, it.festival, it.time].filter(Boolean).map(esc).join(' · ');
       html+='<div class="'+cls+'"><div class="a">'+esc(it.artist||'(unnamed shot)')+badge+'</div>';
       if(meta) html+='<div class="m">'+meta+'</div>';
       if(it.pilot) html+='<div class="m">🧑‍✈️ '+esc(it.pilot)+'</div>';
@@ -657,7 +750,7 @@ const PAGE = `<!DOCTYPE html>
 </html>`;
 
 // ── Server factory ───────────────────────────────────────────────────────────
-function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlist, isMoveLocked, checkMovePassword, onNotify }) {
+function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlist, onShotlistCommand, isMoveLocked, checkMovePassword, onNotify }) {
   const app = express();
   let server = null;
   let wss = null;
@@ -698,6 +791,13 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
   app.get('/state', (_req, res) => { noStore(res); res.json({ pageBuild: PAGE_BUILD, serverStarted: SERVER_STARTED, status: getSnapshot() }); });
   // Shot list: the desktop's CSV assignments (the phone's "Import from Computer").
   app.get('/shotlist', (_req, res) => { noStore(res); res.json({ items: (getShotlist ? getShotlist() : []) || [] }); });
+  // Phone → desktop shot-list update: { id, patch:{ status } } so marking a shot
+  // done/skipped on the phone marks it on the computer's shot list too.
+  app.post('/shotlist-cmd', express.json(), (req, res) => {
+    noStore(res);
+    try { if (onShotlistCommand && req.body && req.body.id) onShotlistCommand(req.body); } catch {}
+    res.json({ ok: true });
+  });
 
   // ONE place that dispatches a phone command — used by BOTH the WebSocket and the
   // HTTP POST /cmd path so the buttons work even when WebSockets don't.
@@ -707,7 +807,7 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
       Promise.resolve(onMove()).catch(() => {});
     } else if (msg.cmd === 'setMode' && (msg.mode === 'auto' || msg.mode === 'manual')) {
       try { onSetMode(msg.mode); } catch {}
-    } else if (msg.cmd === 'copyMedia' || msg.cmd === 'copyBella' || msg.cmd === 'dumpRaws' || msg.cmd === 'completeCard') {
+    } else if (msg.cmd === 'copyMedia' || msg.cmd === 'copyBella' || msg.cmd === 'dumpRaws' || msg.cmd === 'completeCard' || msg.cmd === 'deliverAll' || msg.cmd === 'deleteSd') {
       try { if (onCommand) onCommand(msg.cmd); } catch {}
     }
   }

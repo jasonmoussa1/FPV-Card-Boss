@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FPV Card Boss — User Manual</title>
+<style>
+  :root{
+    --bg:#050508; --bg2:#0a0c14;
+    --cyan:#00e5ff; --purple:#b44fff; --green:#00ff88; --amber:#ffb020; --red:#ff5c7c;
+    --ink:#eef2f7; --muted:rgba(255,255,255,.55); --line:rgba(255,255,255,.12);
+    --panel:rgba(255,255,255,.045);
+  }
+  *{box-sizing:border-box;}
+  @page{ size:Letter; margin:0; }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:13px;line-height:1.55;}
+  .mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;}
+
+  /* Each printed page */
+  .page{
+    position:relative;width:8.5in;min-height:11in;padding:0.7in 0.72in 0.85in;
+    background:
+      radial-gradient(ellipse at 0% 100%, rgba(0,229,255,.10) 0%, transparent 48%),
+      radial-gradient(ellipse at 100% 0%, rgba(180,79,255,.12) 0%, transparent 48%),
+      var(--bg);
+    page-break-after:always;overflow:hidden;
+  }
+  .page:last-child{page-break-after:auto;}
+  .page .corner{position:absolute;top:0.42in;right:0.72in;font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--muted);font-weight:800;}
+  .page .pgfoot{position:absolute;bottom:0.42in;left:0.72in;right:0.72in;display:flex;
+    justify-content:space-between;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:rgba(255,255,255,.38);font-weight:700;border-top:1px solid var(--line);padding-top:7px;}
+
+  /* Cover */
+  .cover{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;}
+  .cover .logo{width:84px;height:84px;border-radius:22px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--cyan),var(--purple));box-shadow:0 0 40px rgba(0,229,255,.35);
+    font-size:42px;margin-bottom:30px;}
+  .cover h1{font-size:62px;line-height:.98;font-weight:900;letter-spacing:-1px;margin:0 0 10px;
+    background:linear-gradient(120deg,#fff 10%,var(--cyan) 55%,var(--purple) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .cover .tag{font-size:17px;color:var(--muted);max-width:5.6in;font-weight:500;}
+  .cover .chips{margin-top:34px;display:flex;gap:10px;flex-wrap:wrap;}
+  .chip{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;padding:8px 14px;
+    border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);}
+  .chip.c{border-color:rgba(0,229,255,.45);color:var(--cyan);}
+  .chip.p{border-color:rgba(180,79,255,.45);color:var(--purple);}
+  .cover .rule{height:4px;width:140px;border-radius:4px;margin:38px 0 0;
+    background:linear-gradient(90deg,var(--cyan),var(--purple));}
+  .cover .meta{position:absolute;bottom:0.7in;left:0.72in;font-size:11px;color:var(--muted);letter-spacing:.05em;}
+
+  /* Section headings */
+  h2.sec{display:flex;align-items:center;gap:14px;font-size:25px;font-weight:900;letter-spacing:-.3px;margin:0 0 4px;}
+  h2.sec .num{flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:900;color:#04060a;background:linear-gradient(135deg,var(--cyan),var(--purple));}
+  .sublede{color:var(--muted);font-size:13px;margin:0 0 18px 52px;}
+  h3{font-size:15px;font-weight:800;letter-spacing:.01em;margin:22px 0 8px;color:#fff;}
+  h3 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--cyan);margin-right:9px;vertical-align:middle;}
+  p{margin:0 0 10px;}
+  a{color:var(--cyan);text-decoration:none;}
+  strong{color:#fff;}
+  .lead{font-size:14.5px;color:#d7deea;}
+
+  /* Step list */
+  ol.steps{list-style:none;counter-reset:s;margin:6px 0 6px;padding:0;}
+  ol.steps>li{counter-increment:s;position:relative;padding:4px 0 14px 44px;}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:1px;width:28px;height:28px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#04060a;
+    background:linear-gradient(135deg,var(--cyan),var(--purple));}
+  ol.steps>li .st{font-weight:800;color:#fff;}
+  ul.ticks{list-style:none;margin:6px 0;padding:0;}
+  ul.ticks>li{position:relative;padding:3px 0 3px 24px;}
+  ul.ticks>li::before{content:"›";position:absolute;left:4px;color:var(--cyan);font-weight:900;}
+
+  /* Callouts */
+  .call{border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:13px 16px;margin:14px 0;background:var(--panel);}
+  .call .ttl{font-weight:900;font-size:11px;letter-spacing:.13em;text-transform:uppercase;margin-bottom:4px;}
+  .call p{margin:0;font-size:12.5px;color:#d7deea;}
+  .call.tip{border-left-color:var(--green);} .call.tip .ttl{color:var(--green);}
+  .call.note{border-left-color:var(--cyan);} .call.note .ttl{color:var(--cyan);}
+  .call.warn{border-left-color:var(--amber);} .call.warn .ttl{color:var(--amber);}
+  .call.danger{border-left-color:var(--red);} .call.danger .ttl{color:var(--red);}
+
+  /* Code + paths */
+  code.k{font-family:ui-monospace,Consolas,monospace;background:rgba(0,229,255,.10);border:1px solid rgba(0,229,255,.25);
+    color:var(--cyan);padding:1px 7px;border-radius:6px;font-size:12px;}
+  .codeblock{font-family:ui-monospace,Consolas,monospace;background:#0b0e16;border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px;font-size:12px;color:#cfe8ef;margin:10px 0;white-space:pre-wrap;}
+
+  /* Cards grid */
+  .cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:12px 0;}
+  .mcard{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--panel);}
+  .mcard .ic{font-size:24px;}
+  .mcard h4{margin:8px 0 4px;font-size:14px;font-weight:900;}
+  .mcard.shots{border-color:rgba(0,229,255,.35);} .mcard.shots h4{color:var(--cyan);}
+  .mcard.slate{border-color:rgba(180,79,255,.35);} .mcard.slate h4{color:var(--purple);}
+  .mcard.move{border-color:rgba(255,176,32,.35);} .mcard.move h4{color:var(--amber);}
+  .mcard p{font-size:11.5px;color:var(--muted);margin:0;}
+
+  /* Table */
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800;}
+  td .mono{color:var(--cyan);}
+
+  /* TOC */
+  .toc{margin:6px 0 0;}
+  .toc .row{display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);}
+  .toc .row .n{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-weight:900;color:#04060a;background:linear-gradient(135deg,var(--cyan),var(--purple));font-size:13px;flex:0 0 auto;}
+  .toc .row .t{font-weight:800;color:#fff;font-size:14px;}
+  .toc .row .d{color:var(--muted);font-size:12px;}
+  .req td:first-child{color:#fff;font-weight:700;width:34%;}
+</style>
+</head>
+<body>
+
+<!-- ░░░ COVER ░░░ -->
+<section class="page cover">
+  <div class="logo">🎬</div>
+  <h1>FPV<br/>CARD&nbsp;BOSS</h1>
+  <div class="tag">The festival FPV stabilizing, delivery &amp; slate command center — with a live mobile companion for the field.</div>
+  <div class="chips">
+    <span class="chip">Version 1.2.0</span>
+    <span class="chip c">Windows 10 / 11 · 64-bit</span>
+    <span class="chip p">Mobile companion · iPhone &amp; Android</span>
+  </div>
+  <div class="rule"></div>
+  <div class="meta">User Manual &amp; Setup Guide &nbsp;·&nbsp; Mobile page build pwa-2026-06-02-x-offline-first</div>
+</section>
+
+<!-- ░░░ WELCOME + CONTENTS ░░░ -->
+<section class="page">
+  <div class="corner">Welcome</div>
+  <h2 class="sec"><span class="num">0</span> Welcome</h2>
+  <p class="sublede">What FPV Card Boss does and how this manual is organized.</p>
+  <p class="lead">FPV Card Boss automates the tedious parts of festival FPV: it drives the GoPro Player batch
+  exporter to stabilize your footage, then copies the results to your local, media, and Bella drives, dumps the
+  raws, and advances your card queue — optionally <strong>hands-free</strong>. A built-in <strong>mobile companion</strong>
+  lets a pilot or spotter run the shot list and digital slate from a phone, and mark shots done so the editor at the
+  computer knows footage is on the way.</p>
+
+  <div class="call note"><div class="ttl">Self-contained</div><p>The whole system — the desktop app, the stabilizer
+  robot, the mobile companion web server, and the festival slate — lives inside a single <code class="k">.exe</code>.
+  No installation, no dependencies to chase.</p></div>
+
+  <h3><span class="dot"></span>Contents</h3>
+  <div class="toc">
+    <div class="row"><span class="n">1</span><div><div class="t">System Requirements</div><div class="d">What you need on the computer and phone.</div></div></div>
+    <div class="row"><span class="n">2</span><div><div class="t">Install &amp; First Launch</div><div class="d">Running the app on any Windows PC.</div></div></div>
+    <div class="row"><span class="n">3</span><div><div class="t">First-Time Setup</div><div class="d">Paths, calibration, Horizon Lock &amp; password.</div></div></div>
+    <div class="row"><span class="n">4</span><div><div class="t">The Core Workflow</div><div class="d">Create → Copy SD → Stabilize → Move → Deliver → Complete.</div></div></div>
+    <div class="row"><span class="n">5</span><div><div class="t">Auto Mode &amp; Horizon Lock</div><div class="d">Hands-free delivery and the level-horizon toggle.</div></div></div>
+    <div class="row"><span class="n">6</span><div><div class="t">The Mobile Companion</div><div class="d">Connecting by Wi-Fi or Tailscale; the three sections.</div></div></div>
+    <div class="row"><span class="n">7</span><div><div class="t">Shot List on the Phone</div><div class="d">Build it, import it, mark it — and sync to the computer.</div></div></div>
+    <div class="row"><span class="n">8</span><div><div class="t">The Festival Slate</div><div class="d">GoPro sync QR, takes, themes &amp; fullscreen.</div></div></div>
+    <div class="row"><span class="n">9</span><div><div class="t">Tips &amp; Troubleshooting</div><div class="d">Per-machine settings, HTTPS limits &amp; fixes.</div></div></div>
+  </div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Welcome</span></div>
+</section>
+
+<!-- ░░░ 1. REQUIREMENTS ░░░ -->
+<section class="page">
+  <div class="corner">Requirements</div>
+  <h2 class="sec"><span class="num">1</span> System Requirements</h2>
+  <p class="sublede">A short checklist before you start.</p>
+
+  <table class="req">
+    <tr><th>Item</th><th>Requirement</th></tr>
+    <tr><td>Computer</td><td>Windows 10 or 11, 64-bit. ~250&nbsp;MB free while running.</td></tr>
+    <tr><td>GoPro stabilizing</td><td><strong>GoPro Player</strong> (with the Batch Exporter) installed on that computer.</td></tr>
+    <tr><td>Drives</td><td>Your local working drive plus any Media / Bella delivery drives you use.</td></tr>
+    <tr><td>Phone</td><td>Any modern iPhone (Safari) or Android (Chrome). Nothing to install — it runs in the browser.</td></tr>
+    <tr><td>Off-Wi-Fi phone use</td><td><strong>Tailscale</strong> app on the PC and phone (optional — only for cellular / different networks).</td></tr>
+  </table>
+
+  <div class="call tip"><div class="ttl">Good to know</div><p>The phone and computer talk over your local network. On the
+  same Wi-Fi nothing extra is needed. To reach the computer from cellular or a different network, Tailscale creates a
+  secure private link (see Section 6).</p></div>
+
+  <h3><span class="dot"></span>What lives where</h3>
+  <ul class="ticks">
+    <li>The <strong>app and all its tools</strong> live inside the <code class="k">.exe</code>.</li>
+    <li>Your <strong>settings, calibration, and phone password</strong> are saved on the computer that runs the app — so each computer keeps its own.</li>
+    <li>Your <strong>phone's shot list</strong> is saved on the phone, so it works even with the computer off.</li>
+  </ul>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>1 · Requirements</span></div>
+</section>
+
+<!-- ░░░ 2. INSTALL ░░░ -->
+<section class="page">
+  <div class="corner">Install</div>
+  <h2 class="sec"><span class="num">2</span> Install &amp; First Launch</h2>
+  <p class="sublede">There is no installer — you just run the file.</p>
+
+  <ol class="steps">
+    <li><span class="st">Copy the app to the computer.</span> Put <span class="mono">FPV Card Boss 1.2.0.exe</span> anywhere — Desktop, a folder, or a USB stick.</li>
+    <li><span class="st">Double-click it.</span> It launches directly; the first start takes a few extra seconds as it unpacks.</li>
+    <li><span class="st">Clear the SmartScreen warning (first time only).</span> Windows may show a blue <em>"Windows protected your PC"</em> box. Click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
+  </ol>
+
+  <div class="call note"><div class="ttl">Why the warning?</div><p>SmartScreen flags any app it hasn't seen widely
+  downloaded yet. This is expected for software you distribute yourself and is safe to run.</p></div>
+
+  <div class="call warn"><div class="ttl">Antivirus / firewall</div><p>If Windows Firewall asks to allow network access,
+  choose <strong>Allow</strong> — the app needs it to serve the mobile companion to your phone on the local network.</p></div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>2 · Install</span></div>
+</section>
+
+<!-- ░░░ 3. SETUP ░░░ -->
+<section class="page">
+  <div class="corner">Setup</div>
+  <h2 class="sec"><span class="num">3</span> First-Time Setup</h2>
+  <p class="sublede">Do this once on each computer. Open <strong>Setup</strong> in the app.</p>
+
+  <h3><span class="dot"></span>Step A — Set your folder paths</h3>
+  <p>In Setup, point each path at this computer's folders:</p>
+  <ul class="ticks">
+    <li><strong>Local root</strong> — where stabilized footage is organized.</li>
+    <li><strong>Media drive</strong> and <strong>Bella drive</strong> — your delivery destinations.</li>
+    <li><strong>Raw Dump folder</strong> — where raw files are consolidated.</li>
+    <li><strong>SD Card drive</strong>, <strong>GoPro output folder</strong>, and the <strong>GoPro App path</strong>.</li>
+  </ul>
+  <div class="call note"><div class="ttl">Defaults are placeholders</div><p>The default paths point at the original
+  computer's folders. Change them to match the machine you're on.</p></div>
+
+  <h3><span class="dot"></span>Step B — Calibrate the GoPro Robot</h3>
+  <p>Run <strong>🎯 Calibrate GoPro Robot</strong> and follow the 14 on-screen steps — hover each control in GoPro Player
+  and press <strong>SPACE</strong> to capture its position (including the new <strong>Horizon Lock</strong> point).</p>
+  <div class="call danger"><div class="ttl">Calibration is per-computer</div><p>It is saved for this computer and its
+  exact screen resolution. You <strong>must re-calibrate</strong> on every new machine or if you change display scaling/resolution.</p></div>
+
+  <h3><span class="dot"></span>Step C — Set the phone "Move Files" password</h3>
+  <p>In Setup, type a simple password in <strong>Phone "Move Files" Password</strong> (shown in plain text so you can read it).
+  This gates only the Move Files section on the phone — the Shot List &amp; Slate stay open to anyone. Leave it blank for no password.</p>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>3 · Setup</span></div>
+</section>
+
+<!-- ░░░ 4. WORKFLOW ░░░ -->
+<section class="page">
+  <div class="corner">Workflow</div>
+  <h2 class="sec"><span class="num">4</span> The Core Workflow</h2>
+  <p class="sublede">Festival mode, from card in hand to delivered &amp; logged.</p>
+
+  <ol class="steps">
+    <li><span class="st">① Create Directory Paths.</span> Select the pilot/card, then click the big green button to create this card's folders.</li>
+    <li><span class="st">② Copy SD Card → Local RAW.</span> The amber button right beneath it copies the SD card into the local RAW folder and verifies the file count.</li>
+    <li><span class="st">Set export options.</span> Toggle <strong>Horizon Lock</strong> on if this batch needs it (Section 5).</li>
+    <li><span class="st">🤖 Auto-Run GoPro Batch.</span> The robot drives GoPro Player to stabilize. <strong>Do not touch the mouse or keyboard while it runs.</strong></li>
+    <li><span class="st">Move files to STABILIZED.</span> When the export finishes, move the exported clips into the card's STABILIZED folder.</li>
+    <li><span class="st">Deliver.</span> Copy to Media Drive, Copy to Bella Drive, and Dump Raws as needed.</li>
+    <li><span class="st">Complete Card &amp; Shift.</span> Logs the card to history and advances to the next one.</li>
+  </ol>
+
+  <div class="call tip"><div class="ttl">Do it from the couch</div><p>Every one of these delivery steps can also be
+  triggered from your phone's <strong>Move Files</strong> section (see Section 6).</p></div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>4 · Workflow</span></div>
+</section>
+
+<!-- ░░░ 5. AUTO + HORIZON ░░░ -->
+<section class="page">
+  <div class="corner">Automation</div>
+  <h2 class="sec"><span class="num">5</span> Auto Mode &amp; Horizon Lock</h2>
+  <p class="sublede">Hands-free delivery, and the level-horizon export toggle.</p>
+
+  <h3><span class="dot"></span>Auto Mode (on the computer)</h3>
+  <p>Use the big <strong>AUTO / MANUAL</strong> button above "Auto-Run GoPro Batch".</p>
+  <ul class="ticks">
+    <li><strong>Manual</strong> — you click Move, each delivery, and Complete yourself (the default, deliberate flow).</li>
+    <li><strong>Auto</strong> — the moment an export finishes it automatically moves files → Media → Bella → completes the card and advances. If any step fails it <strong>stops and alerts you</strong>, and never completes a card that didn't fully deliver.</li>
+  </ul>
+  <div class="call note"><div class="ttl">Raws are always manual</div><p>Dumping raws is never part of Auto mode (or the
+  phone's Send to All) — it is always a deliberate click on the <strong>Dump Raws</strong> button.</p></div>
+  <div class="call note"><div class="ttl">Auto is great for walking away</div><p>Turn it on when you trust the setup and
+  need to step away. A live status line shows each step as it runs.</p></div>
+
+  <h3><span class="dot"></span>Horizon Lock</h3>
+  <p>Toggle <strong>Horizon Lock</strong> ON (it turns blue 🌐) before running a batch. The robot will enable Horizon Lock in
+  the GoPro batch exporter so your footage exports level. Turn it OFF for a normal export.</p>
+  <div class="call warn"><div class="ttl">Needs its calibration point</div><p>If you turn it on but haven't captured the
+  Horizon Lock position during calibration, the app warns you and simply skips the click — re-calibrate to enable it.</p></div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>5 · Automation</span></div>
+</section>
+
+<!-- ░░░ 6. MOBILE ░░░ -->
+<section class="page">
+  <div class="corner">Mobile</div>
+  <h2 class="sec"><span class="num">6</span> The Mobile Companion</h2>
+  <p class="sublede">Run the shot list, slate, and deliveries from your phone.</p>
+
+  <h3><span class="dot"></span>Connecting — scan a QR code</h3>
+  <ol class="steps">
+    <li><span class="st">Open the panel.</span> In the computer's Setup, find <strong>"Open on your phone"</strong> — each address shows a <strong>QR code</strong> and a <strong>Copy</strong> button (tap the <strong>?</strong> beside it for an in-app reminder).</li>
+    <li><span class="st">Scan with the phone camera</span> (or Copy the link and paste it into the phone browser).</li>
+    <li><span class="st">Add to Home Screen.</span> In the browser's Share menu choose <strong>Add to Home Screen</strong> for an app icon, full screen, and saved data.</li>
+  </ol>
+
+  <h3><span class="dot"></span>Which address? (they're different on purpose)</h3>
+  <table>
+    <tr><th>Address</th><th>Use it for</th></tr>
+    <tr><td><strong>★ Tailscale HTTPS</strong><br><span class="mono">https://…ts.net</span></td><td><strong>The recommended one.</strong> Works anywhere with Tailscale on. The only address that opens <strong>offline</strong> (computer off) and enables the <strong>slate microphone</strong>. Add this to the Home Screen.</td></tr>
+    <tr><td>Tailscale HTTP<br><span class="mono">100.x.x.x</span></td><td>Works anywhere with Tailscale on, but <em>online-only</em> — no offline, no mic.</td></tr>
+    <tr><td>Same Wi-Fi (LAN)<br><span class="mono">192.168.x.x</span></td><td>Quick access on the same Wi-Fi as the computer. Online-only.</td></tr>
+  </table>
+  <div class="call note"><div class="ttl">Why HTTPS?</div><p>Browsers only allow a web app to work <strong>offline</strong> or use the
+  <strong>microphone</strong> over a secure (<span class="mono">https://</span>) address — that's the Tailscale HTTPS one. Open it once while
+  the computer is running so the phone saves a copy; after that it opens with the computer off.</p></div>
+
+  <h3><span class="dot"></span>The three sections</h3>
+  <div class="cards">
+    <div class="mcard shots"><div class="ic">📋</div><h4>Shot List &amp; Slate</h4><p>Open to anyone. Build/track shots and launch the slate. Works offline.</p></div>
+    <div class="mcard slate"><div class="ic">🎬</div><h4>Simple Slate</h4><p>The festival slate on its own — type in artist/stage and go.</p></div>
+    <div class="mcard move"><div class="ic">🔒</div><h4>Move Files</h4><p>Live status &amp; delivery. Asks for the password you set in Setup.</p></div>
+  </div>
+  <div class="call note"><div class="ttl">Delivery mode (Move Files)</div><p>Starts on <strong>Manual</strong> — tap each
+  delivery yourself. <strong>⚡ Auto · Send to All</strong> is one tap that <em>moves the files and copies to every set-up drive
+  (Media + Bella) at once</em> — you still dump raws and complete the card yourself. After raws are backed up, a
+  <strong>🗑 Delete SD Card</strong> button appears so you can finish the entire process from the phone.</p></div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>6 · Mobile</span></div>
+</section>
+
+<!-- ░░░ 7. SHOT LIST ░░░ -->
+<section class="page">
+  <div class="corner">Shot List</div>
+  <h2 class="sec"><span class="num">7</span> Shot List on the Phone</h2>
+  <p class="sublede">Build it, import it, mark it — and keep the computer in sync.</p>
+
+  <h3><span class="dot"></span>Three ways to add shots</h3>
+  <ul class="ticks">
+    <li><strong>➕ Add Shot</strong> — enter Artist, Stage, Festival (plus optional Pilot/Day) and keep adding more in a row.</li>
+    <li><strong>📄 Add CSV</strong> — paste rows or upload a <span class="mono">.csv/.txt</span>. Columns: <em>Artist, Stage, Festival, Pilot, Day</em>.</li>
+    <li><strong>⤵ Import PC</strong> — pull the computer's loaded shot list onto the phone (each row links 1:1 to the computer).</li>
+  </ul>
+
+  <h3><span class="dot"></span>Marking shots — and the red light</h3>
+  <p>Each shot has <strong>Mark Done</strong>, <strong>Skip</strong>, <strong>✏️ Edit</strong>, and <strong>🎬 Slate</strong>. For shots
+  imported from the computer, marking Done or Skipped updates the <strong>same row on the computer</strong> and triggers a
+  <strong>red blinking light + ding</strong> there — so the editor knows that artist's footage is completed (or skipped) and incoming.</p>
+
+  <div class="call tip"><div class="ttl">Works off-network too</div><p>If you mark a shot while briefly off Wi-Fi or before
+  Tailscale reconnects, it's <strong>queued and retried</strong> automatically — it reaches the computer the moment you're back.
+  A <em>"⏳ waiting to sync"</em> note shows while anything is pending.</p></div>
+
+  <h3><span class="dot"></span>It remembers you</h3>
+  <p>Your selected <strong>pilot and day</strong> are saved on the phone — back out, open the slate, or close the app, and you
+  return to your pilot/day with no re-selecting. The shot list also opens with the <strong>computer off</strong>.</p>
+
+  <h3><span class="dot"></span>Resetting on the computer (📋 Shot List window)</h3>
+  <p>In the computer's <strong>📋 Shot List</strong> window, a finished day shows <strong>↩ Reopen Day</strong> at the
+  <strong>top and bottom</strong> of that day — it sends <em>every</em> shot for that pilot/day (completed <em>and</em> skipped)
+  back to pending. <strong>⟳ Reset Entire List</strong> (top toolbar) does the same for <strong>every pilot and day</strong> at once.
+  A shot you Skip in the list is also skipped by the card workflow, so it won't reappear as the next card.</p>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>7 · Shot List</span></div>
+</section>
+
+<!-- ░░░ 8. SLATE ░░░ -->
+<section class="page">
+  <div class="corner">Slate</div>
+  <h2 class="sec"><span class="num">8</span> The Festival Slate</h2>
+  <p class="sublede">A high-contrast digital slate with GoPro time-sync.</p>
+
+  <p>Open it from any shot (🎬 <strong>Slate</strong>, pre-filled with that artist/stage/pilot) or from <strong>Simple Slate</strong>
+  on the home screen. Use the <strong>‹ Back</strong> button to return to where you came from.</p>
+
+  <h3><span class="dot"></span>Features</h3>
+  <ul class="ticks">
+    <li><strong>GoPro Labs sync QR</strong> — scan it with a GoPro to sync its clock/timecode. Modes: <em>Stable, Med, Fast,</em> and <em>Freeze</em> (a frozen snapshot to stop screen flicker). Live TC for 24/25/30/60&nbsp;fps.</li>
+    <li><strong>Take counter</strong> — bump takes on the linked shot; the count saves back and the slate remembers it next time.</li>
+    <li><strong>Themes</strong> — Vibrant, Aurora, Sunrise, Lime, Laser neon profiles.</li>
+    <li><strong>Landscape lock &amp; fullscreen</strong> — a rotate-to-landscape guard and a clean fullscreen slate for the camera.</li>
+  </ul>
+
+  <div class="call note"><div class="ttl">Mic &amp; screen-wake need the HTTPS address</div><p>Audio take-recording and keeping
+  the screen awake only work when you open the app via the <strong>★ Tailscale HTTPS</strong> address (Section 6). Over a plain
+  <span class="mono">http://</span> address browsers block them. Everything else — QR sync, the slate, takes, and shot sync — works on any address.</p></div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>8 · Slate</span></div>
+</section>
+
+<!-- ░░░ 9. TROUBLESHOOTING ░░░ -->
+<section class="page">
+  <div class="corner">Help</div>
+  <h2 class="sec"><span class="num">9</span> Tips &amp; Troubleshooting</h2>
+  <p class="sublede">Quick answers to common situations.</p>
+
+  <table>
+    <tr><th>Situation</th><th>What to do</th></tr>
+    <tr><td>Phone says "Offline" / can't reach the computer</td><td>Make sure the app is open on the PC and you're on the same Wi-Fi (or Tailscale is on and you used the 100.x address). The Shot List &amp; Slate still work offline.</td></tr>
+    <tr><td>Marking a shot doesn't update the computer</td><td>That shot must be linked — tap <strong>⤵ Import PC</strong> once; it links your existing shots 1:1 to the computer. Then Done/Skip will sync and light up.</td></tr>
+    <tr><td>The phone shows an old screen after an update</td><td>Reload the page; the build stamp at the very bottom should match the latest. On an installed (home-screen) app, close and reopen it.</td></tr>
+    <tr><td>Robot clicks the wrong spots</td><td>Re-run <strong>Calibrate GoPro Robot</strong> — calibration is tied to this computer's resolution/scaling.</td></tr>
+    <tr><td>Mic recording in the slate won't start</td><td>Expected over a plain address — it needs HTTPS. Use the rest of the slate normally.</td></tr>
+    <tr><td>Moving the app to a new computer</td><td>Just copy the .exe. Then redo Setup: paths, calibration, and password are per-computer.</td></tr>
+  </table>
+
+  <div class="call note"><div class="ttl">Find the build</div><p>The mobile page shows its build at the very bottom (e.g.
+  <span class="mono">build pwa-2026-06-02-x-offline-first</span>). Handy when confirming an update reached the phone.</p></div>
+
+  <div style="margin-top:34px;text-align:center;color:var(--muted);font-size:12px;">
+    <div style="display:inline-block;width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--cyan),var(--purple));line-height:46px;font-size:24px;">🎬</div>
+    <div style="margin-top:10px;font-weight:900;letter-spacing:.18em;color:#fff;">FPV CARD BOSS 1.2.0</div>
+    <div>Fly safe. Stabilize everything. Deliver from anywhere.</div>
+  </div>
+
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>9 · Help</span></div>
+</section>
+
+</body>
+</html>

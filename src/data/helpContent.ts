@@ -188,4 +188,15 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     what: "RAW = the untouched original clips straight off the SD card. STABILIZED = the clips after GoPro/ReelSteady smooths them.",
     why: "The SOP keeps these in separate subfolders for every shot so originals are never overwritten and you can always re-export if something goes wrong.",
   },
+  phoneAccess: {
+    title: "Open on your phone",
+    what: "These are the web addresses for the phone companion. Scan a QR code with your phone's camera, or tap Copy and paste the link into the phone's browser. Then use 'Add to Home Screen' for an app icon.",
+    why: "There are different addresses because phones treat them differently. The HTTPS (Tailscale) one is special: only a secure HTTPS address is allowed by browsers to work offline and use the microphone.",
+    tips: [
+      "★ Recommended — Tailscale (HTTPS): use this one. Works anywhere with Tailscale on, opens the Shot List & Slate even with the computer OFF, and enables the slate mic. Add it to the Home Screen.",
+      "Tailscale (HTTP): works anywhere with Tailscale on, but online-only — no offline and no mic.",
+      "Same Wi-Fi (LAN, 192.168…): quick access when the phone is on the same Wi-Fi as the computer. Online-only.",
+      "First time: open the address once while the computer is running (and Tailscale on) so the phone can save a copy — after that the HTTPS one works offline.",
+    ],
+  },
 };

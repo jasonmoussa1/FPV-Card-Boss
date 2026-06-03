@@ -12,7 +12,7 @@ interface ElectronBridge {
   calibrateRobot(): Promise<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string, meta?: { cardId: string; pilotName: string; artistName: string; horizonLock?: boolean }): Promise<{ success: boolean; message: string; robotStartTime?: number }>;
-  dashboardGetInfo(): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; movePassword?: string }>;
+  dashboardGetInfo(): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; movePassword?: string; tailscaleHttpsUrl?: string }>;
   dashboardSetMovePassword(pw: string): Promise<{ ok: boolean; movePassword: string }>;
   dashboardSetPort(port: number): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; error?: string }>;
   dashboardSetMoveMode(mode: 'auto' | 'manual'): Promise<{ ok?: boolean; moveMode?: 'auto' | 'manual'; error?: string }>;
@@ -20,7 +20,7 @@ interface ElectronBridge {
   offDashboardStatus(): void;
   onDashboardMoveDone(callback: (data: { moved: number; files: string[]; totalGB?: number; cardId?: string }) => void): void;
   offDashboardMoveDone(): void;
-  onDashboardCommand(callback: (data: { action: 'copyMedia' | 'copyBella' | 'dumpRaws' | 'completeCard' }) => void): void;
+  onDashboardCommand(callback: (data: { action: 'copyMedia' | 'copyBella' | 'dumpRaws' | 'completeCard' | 'deliverAll' | 'deleteSd' }) => void): void;
   offDashboardCommand(): void;
   dashboardReportState(patch: {
     mode?: 'festival' | 'simple';
@@ -32,10 +32,13 @@ interface ElectronBridge {
     bellaAvailable?: boolean; bellaState?: 'idle' | 'copying' | 'success' | 'error'; bellaDest?: string; bellaHint?: string;
     dumpAvailable?: boolean; dumpState?: 'idle' | 'dumping' | 'success' | 'error'; dumpDest?: string; dumpHint?: string;
     completeAvailable?: boolean; completeHint?: string;
+    deleteSdAvailable?: boolean; deleteSdState?: 'idle' | 'deleting' | 'success' | 'error'; deleteSdHint?: string; deleteSdDest?: string;
   }): Promise<{ ok: boolean }>;
   dashboardReportShotlist(items: Array<{ id: string; daySection: string; pilot: string; assignment: string; stage?: string; setTime?: string; flyTime?: string; dropTime?: string; notes?: string; status: string; takes?: string }>): Promise<{ ok: boolean }>;
-  onDashboardNotify(callback: (n: { type?: string; name?: string }) => void): void;
+  onDashboardNotify(callback: (n: { type?: string; name?: string; status?: string }) => void): void;
   offDashboardNotify(): void;
+  onDashboardShotlistCommand(callback: (cmd: { id?: string; match?: { assignment?: string; pilot?: string; daySection?: string }; patch?: Record<string, string> }) => void): void;
+  offDashboardShotlistCommand(): void;
   onCopyProgress(callback: (pct: number) => void): void;
   offCopyProgress(): void;
   onGoProRobotStatus(callback: (data: { success: boolean; exitCode: number; error?: string }) => void): void;

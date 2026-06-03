@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Phone → desktop alert (shot completed on mobile): ding + toast on the computer.
   onDashboardNotify: (callback) => ipcRenderer.on('dashboard-notify', (_event, data) => callback(data)),
   offDashboardNotify: () => ipcRenderer.removeAllListeners('dashboard-notify'),
+  // Phone → desktop: mark a shot done/skipped on the computer's shot list.
+  onDashboardShotlistCommand: (callback) => ipcRenderer.on('dashboard-shotlist-command', (_event, data) => callback(data)),
+  offDashboardShotlistCommand: () => ipcRenderer.removeAllListeners('dashboard-shotlist-command'),
   onCopyProgress: (callback) => {
     ipcRenderer.on('robocopy-progress', (_event, pct) => callback(pct));
   },

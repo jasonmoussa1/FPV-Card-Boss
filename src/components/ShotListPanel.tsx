@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { FpvAssignment, ShotListItem, ShotStatus } from '../types';
 
 const STORAGE_KEY = 'fpv_boss_shotlist';
@@ -14,6 +14,9 @@ interface ShotListPanelProps {
   onClose: () => void;
   assignments: FpvAssignment[]; // Dashboard's allAssignments
   pilots: string[];             // unique pilot names
+  // Fired whenever a shot's status changes (user click here, the phone, or
+  // Mark-day-done). Lets the card workflow honour skips made in the shot list.
+  onShotStatusChange?: (info: { assignment: string; pilot: string; daySection: string; status: ShotStatus }) => void;
 }
 
 function baseKey(daySection: string, pilot: string, assignment: string, flyTime: string): string {
@@ -97,7 +100,7 @@ function triggerDownload(content: string, mime: string, filename: string): void 
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: ShotListPanelProps) {
+export default function ShotListPanel({ isOpen, onClose, assignments, pilots, onShotStatusChange }: ShotListPanelProps) {
   const [items, setItems] = useState<ShotListItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -168,6 +171,49 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
     } catch { /* phone bridge not available */ }
   }, [items]);
 
+  // Tell the card workflow about every status change (from any source: a click
+  // here, the phone, or Mark-day-done) so a shot skipped in the list is also
+  // skipped by the card queue, and an un-skip puts it back. Diffing the items
+  // catches all paths in one place. On first load we only emit existing skips so
+  // the queue stays in sync without disturbing pending/completed rows.
+  const prevStatusRef = useRef<Map<string, ShotStatus>>(new Map());
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const next = new Map<string, ShotStatus>();
+    items.forEach(it => {
+      next.set(it.id, it.status);
+      const before = prev.get(it.id);
+      const changed = before === undefined ? it.status === 'skipped' : before !== it.status;
+      if (changed) {
+        onShotStatusChange?.({ assignment: it.assignment, pilot: it.pilot, daySection: it.daySection, status: it.status });
+      }
+    });
+    prevStatusRef.current = next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
+  // Phone marked a shot done/skipped or edited it (incl. notes) → apply it here.
+  // Matches by the stable id first; falls back to matching by assignment+pilot+day
+  // so a change still lands even if ids ever drift. Registered once.
+  useEffect(() => {
+    if (!window.electron?.onDashboardShotlistCommand) return;
+    const norm = (s?: string) => String(s ?? '').toUpperCase().trim();
+    window.electron.onDashboardShotlistCommand((cmd) => {
+      if (!cmd || !cmd.patch) return;
+      setItems(prev => {
+        let idx = cmd.id ? prev.findIndex(it => it.id === cmd.id) : -1;
+        if (idx < 0 && cmd.match) {
+          const m = cmd.match as { assignment?: string; pilot?: string; daySection?: string };
+          idx = prev.findIndex(it => norm(it.assignment) === norm(m.assignment) && norm(it.pilot) === norm(m.pilot) && norm(it.daySection) === norm(m.daySection));
+        }
+        if (idx < 0) return prev;
+        const next = prev.slice();
+        next[idx] = { ...next[idx], ...(cmd.patch as Partial<ShotListItem>) };
+        return next;
+      });
+    });
+    return () => { window.electron?.offDashboardShotlistCommand?.(); };
+  }, []);
 
   // Checked pilots are "in scope" — this is the working set used for the exports.
   const scopedItems = useMemo(
@@ -280,13 +326,20 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
         : it
     ));
   };
-  // Re-open a finished pilot-day: that pilot's completed shots go back to pending.
+  // Re-open a finished pilot-day: every shot for that pilot/day — completed AND
+  // skipped — goes back to pending, fully refreshing the day.
   const reopenDay = (pilot: string, day: string) => {
     setItems(prev => prev.map(it =>
-      (it.pilot || '—') === pilot && (it.daySection || 'Unknown Day/Section') === day && it.status === 'completed'
+      (it.pilot || '—') === pilot && (it.daySection || 'Unknown Day/Section') === day && it.status !== 'pending'
         ? { ...it, status: 'pending' }
         : it
     ));
+  };
+
+  // Refresh the ENTIRE shot list: every pilot, every day back to pending.
+  const resetAll = () => {
+    if (!confirm('Reset the ENTIRE shot list?\n\nEvery shot for every pilot and every day goes back to pending (completed and skipped both cleared). This cannot be undone.')) return;
+    setItems(prev => prev.map(it => (it.status !== 'pending' ? { ...it, status: 'pending' } : it)));
   };
 
   const addShot = () => {
@@ -460,6 +513,7 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
               <button onClick={exportHTML} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-black uppercase tracking-wider transition">⬇️ HTML</button>
               <button onClick={exportCSV} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-black uppercase tracking-wider transition">⬇️ CSV</button>
               <button onClick={rebuild} className="px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider transition hover:bg-amber-500/20">↻ Rebuild from CSV</button>
+              <button onClick={resetAll} className="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-black uppercase tracking-wider transition hover:bg-rose-500/25">⟳ Reset Entire List</button>
               <button onClick={onClose} className="px-3.5 py-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 text-base font-black transition hover:bg-rose-500/30">✕</button>
             </div>
           </div>
@@ -549,10 +603,20 @@ export default function ShotListPanel({ isOpen, onClose, assignments, pilots }: 
                   const dayDone = group.rows.length > 0 && group.rows.every(r => r.status !== 'pending');
                   return (
                   <div key={group.day} className="space-y-3">
-                <h3 className={`text-sm font-black uppercase tracking-widest ${dayDone ? 'text-rose-400' : 'text-amber-400'}`}>
-                  {group.day}
-                  {dayDone && <span className="ml-2 text-[10px] font-black bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded align-middle">✓ DAY COMPLETE</span>}
-                </h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${dayDone ? 'text-rose-400' : 'text-amber-400'}`}>
+                    {group.day}
+                    {dayDone && <span className="ml-2 text-[10px] font-black bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded align-middle">✓ DAY COMPLETE</span>}
+                  </h3>
+                  {dayDone && (
+                    <button
+                      onClick={() => reopenDay(pg.pilot, group.day)}
+                      className="shrink-0 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition"
+                    >
+                      ↩ Reopen Day
+                    </button>
+                  )}
+                </div>
 
                 {group.rows.map(it => (
                   <div key={it.id} className={`rounded-2xl p-4 space-y-3 ${cardClass(it.status, dayDone)}`}>

@@ -44,6 +44,10 @@ const status = {
   dumpHint: '',
   completeAvailable: false, // a real assignment is in the queue
   completeHint: '',
+  deleteSdAvailable: false, // SD wipe allowed only after raws are dumped
+  deleteSdState: 'idle',    // 'idle' | 'deleting' | 'success' | 'error'
+  deleteSdHint: '',
+  deleteSdDest: '',
 };
 
 // Fields the desktop renderer is allowed to push into `status` via
@@ -62,6 +66,7 @@ const REPORTABLE_FIELDS = new Set([
   'bellaAvailable', 'bellaState', 'bellaDest', 'bellaHint',
   'dumpAvailable', 'dumpState', 'dumpDest', 'dumpHint',
   'completeAvailable', 'completeHint',
+  'deleteSdAvailable', 'deleteSdState', 'deleteSdHint', 'deleteSdDest',
 ]);
 
 // Shot list (CSV assignments + per-shot status) reported by the desktop renderer
@@ -99,6 +104,33 @@ function saveDashboardConfig() {
 
 function nowTime() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Tailscale HTTPS (enables the phone's offline PWA + mic, which need a secure
+// context). We detect Tailscale, read this machine's tailnet DNS name, and make
+// `tailscale serve` proxy https://<name>/ → the local dashboard. Idempotent. ──
+let tailscaleHttpsUrl = '';
+function tailscalePath() {
+  const candidates = [
+    'C:\\Program Files\\Tailscale\\tailscale.exe',
+    'C:\\Program Files (x86)\\Tailscale\\tailscale.exe',
+  ];
+  for (const p of candidates) { try { if (fs.existsSync(p)) return p; } catch {} }
+  return null;
+}
+function setupTailscaleHttps(port) {
+  const ts = tailscalePath();
+  if (!ts) return;
+  const { execFile } = require('child_process');
+  execFile(ts, ['status', '--json'], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+    if (err) return;
+    let dns = '';
+    try { const j = JSON.parse(stdout); dns = ((j.Self && j.Self.DNSName) || '').replace(/\.$/, ''); } catch {}
+    if (!dns) return;
+    tailscaleHttpsUrl = 'https://' + dns + '/';
+    // Point Tailscale's HTTPS at the dashboard's current port. Harmless if already set.
+    execFile(ts, ['serve', '--bg', '--https=443', 'http://127.0.0.1:' + port], { windowsHide: true }, () => {});
+  });
 }
 function broadcastStatus() {
   try { if (dashboard) dashboard.broadcast(status); } catch {}
@@ -168,8 +200,16 @@ app.whenReady().then(() => {
         try { mainWindow.webContents.send('dashboard-notify', n); } catch {}
       }
     },
+    // Phone marked a shot done/skipped → update the desktop ShotListPanel to match.
+    onShotlistCommand: (cmd) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try { mainWindow.webContents.send('dashboard-shotlist-command', cmd); } catch {}
+      }
+    },
   });
   try { dashboard.start(dashboardPort); } catch (e) { console.error('[dashboard] failed to start:', e && e.message); }
+  // Auto-enable the HTTPS (Tailscale) address so the phone PWA works offline + mic.
+  try { setupTailscaleHttps(dashboardPort); } catch {}
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1031,7 +1071,7 @@ ipcMain.handle('move-stabilized-files', async (_event, { videosFolder, stabilize
 // ── Dashboard control IPC (desktop Setup panel) ──────────────────────────────
 ipcMain.handle('dashboard-get-info', () => {
   const info = dashboard ? dashboard.getInfo() : { port: dashboardPort, running: false, urls: [] };
-  return { ...info, moveMode: status.moveMode, movePassword };
+  return { ...info, moveMode: status.moveMode, movePassword, tailscaleHttpsUrl };
 });
 // Desktop sets the simple Move-Files password (shown in plain text on the desktop).
 ipcMain.handle('dashboard-set-move-password', (_event, pw) => {
@@ -1086,8 +1126,9 @@ ipcMain.handle('dashboard-set-port', (_event, port) => {
   dashboardPort = p;
   saveDashboardConfig();
   try { if (dashboard) dashboard.start(p); } catch (e) { return { error: e && e.message }; }
+  try { setupTailscaleHttps(p); } catch {}
   const info = dashboard ? dashboard.getInfo() : { port: p, running: false, urls: [] };
-  return { ...info, moveMode: status.moveMode };
+  return { ...info, moveMode: status.moveMode, tailscaleHttpsUrl };
 });
 
 ipcMain.handle('copy-to-media', async (event, { localRawPath, localStabilizedPath, mediaDrivePath }) => {
