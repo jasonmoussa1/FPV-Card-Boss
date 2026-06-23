@@ -369,14 +369,25 @@ function SlateMode({
           </button>
         </div>
 
-        {/* Landscape Overlay for Portrait Mode */}
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-white p-6 text-center portrait:flex landscape:hidden sm:hidden">
+        {/* Landscape gate for Portrait Mode. Tapping it supplies the user gesture
+            needed to go fullscreen + lock landscape — required when the slate is
+            opened straight from the shot list (auto-entry has no gesture) and the
+            installed PWA manifest pins portrait. Rotating still works in a plain
+            browser tab. Hidden automatically once the view is landscape. */}
+        <button
+          type="button"
+          onClick={async () => {
+            try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); } catch { /* ignore */ }
+            try { await (screen.orientation as any).lock('landscape'); } catch { /* ignore */ }
+          }}
+          className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-white p-6 text-center portrait:flex landscape:hidden sm:hidden"
+        >
           <Maximize2 size={48} className="text-neon-cyan animate-pulse mb-4 rotate-90" />
-          <h2 className="text-2xl font-black italic tracking-tight mb-2">ROTATE DEVICE</h2>
+          <h2 className="text-2xl font-black italic tracking-tight mb-2">TAP TO ENTER SLATE</h2>
           <p className="text-xs font-mono opacity-50 uppercase tracking-widest leading-relaxed">
-            Slate mode requires landscape orientation for optimal filming conditions.
+            Tap anywhere, or rotate to landscape, to open the slate.
           </p>
-        </div>
+        </button>
 
         {/* Pilot ID Badge - Top Left */}
         <div className="absolute top-2 left-4 sm:top-5 sm:left-8 flex flex-col items-start z-20 max-w-[45%]">
