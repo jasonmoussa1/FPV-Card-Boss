@@ -241,9 +241,19 @@ function SlateMode({
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsDisplayMode(false);
                   if (document.fullscreenElement) {
                     document.exitFullscreen().catch(() => {});
+                  }
+                  // If the slate was opened from the phone shot list (the URL carries
+                  // the shot params), exit straight back to the shot list and skip the
+                  // setup screen. The standalone Simple Slate (no params) still returns
+                  // to its setup screen as before.
+                  const p = new URLSearchParams(window.location.search);
+                  const fromShotList = !!(p.get('artist') || p.get('stage') || p.get('pilot') || p.get('festival') || p.get('id'));
+                  if (fromShotList) {
+                    window.location.href = '/';
+                  } else {
+                    setIsDisplayMode(false);
                   }
                 }}
                 className="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-full glass-panel bg-white/10 border-white/20 text-white opacity-60 hover:opacity-100 transition-all"
