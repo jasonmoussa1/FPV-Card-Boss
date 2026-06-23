@@ -646,6 +646,11 @@ export default function App() {
         festival: festival || prev.festival,
         flight: savedTakes > 0 ? savedTakes : prev.flight,
       }));
+      // Launched from the phone shot list (artist/stage/etc. already known) → jump
+      // straight to the horizontal slate, skipping the setup/pre-screen. The
+      // standalone "Simple Slate" (opened at /slate with no params) is unaffected
+      // and still opens on the setup screen where the artist is entered by hand.
+      setIsDisplayMode(true);
     } else if (savedTakes > 0) {
       setMetadata(prev => ({ ...prev, flight: savedTakes }));
     }

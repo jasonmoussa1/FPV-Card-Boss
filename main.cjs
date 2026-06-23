@@ -664,6 +664,31 @@ ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath,
     const horizonLockStep = wantHorizonLock
       ? `\n# Step 3.5 — Toggle Horizon Lock ON (enabled in software)\nClick-GoPro -x ${horizonLock.x} -y ${horizonLock.y} -delayMs 800\n`
       : '\n# Step 3.5 — Horizon Lock skipped (off in software or not calibrated)\n';
+
+    // Pre-clear the GoPro batch queue BEFORE dragging new files in, so any stray/
+    // leftover files (e.g. a clip dropped in manually and forgotten) can't get
+    // mixed into this batch. Mechanism = the proven select-all + Remove used at
+    // end-of-run: click into the batch list, Ctrl+A to select all, click Remove.
+    // Done twice for safety, and it's a harmless no-op when the queue is empty.
+    // Requires the batch-list AND Remove-button calibration points; skipped if the
+    // current calibration predates the Remove button (capture it by recalibrating).
+    const canClearQueue =
+      removeQueue && typeof removeQueue.x === 'number' && typeof removeQueue.y === 'number' &&
+      batchList && typeof batchList.x === 'number' && typeof batchList.y === 'number';
+    const clearQueueStep = canClearQueue
+      ? `\n# Step 0 — Pre-clear batch queue (remove any leftover/stray files)\n` +
+        `Click-GoPro -x ${batchList.x} -y ${batchList.y} -delayMs 400\n` +
+        `[System.Windows.Forms.SendKeys]::SendWait("^a")\n` +
+        `Start-Sleep -Milliseconds 300\n` +
+        `Click-GoPro -x ${removeQueue.x} -y ${removeQueue.y} -delayMs 500\n` +
+        `# second pass in case any files were left selected/unremoved\n` +
+        `Click-GoPro -x ${batchList.x} -y ${batchList.y} -delayMs 300\n` +
+        `[System.Windows.Forms.SendKeys]::SendWait("^a")\n` +
+        `Start-Sleep -Milliseconds 300\n` +
+        `Click-GoPro -x ${removeQueue.x} -y ${removeQueue.y} -delayMs 500\n` +
+        `Add-Content $logFile "Pre-clear: select-all + Remove (x2) done"\n`
+      : `\n# Step 0 — Pre-clear skipped (Remove button not calibrated)\n`;
+
     const robotStartTime = Date.now();
 
     // Count expected output files from RAW folder
@@ -799,7 +824,7 @@ function Click-GoPro {
     [MouseRobot]::mouse_event(0x04, 0, 0, 0, 0)
     Start-Sleep -Milliseconds $delayMs
 }
-
+${clearQueueStep}
 # 3. Open File Explorer to the correct RAW folder.
 # Use the Shell.Application COM object's Explore() — it takes a plain path
 # string, so there are NO command-line quoting issues (the cause of explorer
