@@ -653,6 +653,104 @@ ipcMain.handle('calibrate-robot', async () => {
 });
 
 // PS script template must be unindented so PowerShell's @'...'@ closing marker lands at column 0
+// ── DUAL stabilization mode ──────────────────────────────────────────────────
+// Runs the robot TWICE over the same source clips: a regular pass (outputs ->
+// STABILIZED) then a Horizon Lock pass (outputs -> STABILIZED\HORIZON LOCK). The
+// queue is cleared and outputs are moved between passes so they cannot mix.
+async function runDualMode({ buildPs, horizonLock, clearQueueStep, removeQueue, outputDir, stabilizedPath, expectedCount, firstStart, sender }) {
+  const safeSend = (ch, payload) => { try { if (sender && !sender.isDestroyed()) sender.send(ch, payload); } catch (e) {} };
+  // Dual mode performs its own moves into STABILIZED and STABILIZED\HORIZON LOCK.
+  // Null out activeJob so the phone's auto-move can't race and drop a pass into the
+  // wrong folder.
+  activeJob = null;
+  const hlCalibrated = horizonLock && typeof horizonLock.x === 'number' && typeof horizonLock.y === 'number';
+  const hlOn = hlCalibrated
+    ? `\n# Step 3.5 — Toggle Horizon Lock ON (dual mode pass 2)\nClick-GoPro -x ${horizonLock.x} -y ${horizonLock.y} -delayMs 800\n`
+    : '\n# Step 3.5 — Horizon Lock not calibrated — skipped\n';
+  const hlOff = '\n# Step 3.5 — Horizon Lock OFF (dual mode pass 1)\n';
+
+  const runPass = (script, passStart, label) => new Promise((resolve) => {
+    const tmp = require('os').tmpdir() + '\\gopro_robot.ps1';
+    fs.writeFileSync(tmp, script, 'utf8');
+    const robot = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tmp], { stdio: 'pipe' });
+    let outBuf = '', errBuf = '';
+    robot.stdout.on('data', (d) => { outBuf += d.toString(); });
+    robot.stderr.on('data', (d) => { errBuf += d.toString(); });
+    robot.on('close', async (code) => {
+      fs.unlink(tmp, () => {});
+      if (code !== 0) {
+        safeSend('gopro-robot-status', { success: false, exitCode: code, error: [outBuf, errBuf].filter(Boolean).join('\n').trim() });
+        setStatus({ state: 'error', lastActivity: `${label} failed (exit ${code}) at ${nowTime()}` });
+        resolve(false);
+        return;
+      }
+      safeSend('gopro-robot-status', { success: true, exitCode: code });
+      setStatus({ lastActivity: `${label} — monitoring export at ${nowTime()}` });
+      const ok = await waitForExportComplete(outputDir, passStart, expectedCount, sender);
+      resolve(ok);
+    });
+  });
+
+  const clearQueue = () => new Promise((resolve) => {
+    if (!(removeQueue && typeof removeQueue.x === 'number' && typeof removeQueue.y === 'number')) { resolve(); return; }
+    const removeScript = `Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinAPI {
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, int extra);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+}
+"@
+$dpiOk = $false
+try { $dpiOk = [WinAPI]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch {}
+if (-not $dpiOk) { try { [WinAPI]::SetProcessDPIAware() | Out-Null } catch {} }
+$goProProcess = Get-Process | Where-Object { $_.MainWindowTitle -like "*GoPro*" } | Select-Object -First 1
+if ($goProProcess) {
+    [WinAPI]::SetForegroundWindow($goProProcess.MainWindowHandle) | Out-Null
+    Start-Sleep -Milliseconds 800
+}
+[WinAPI]::SetCursorPos(${removeQueue.x}, ${removeQueue.y}) | Out-Null
+Start-Sleep -Milliseconds 300
+[WinAPI]::mouse_event(0x0002, 0, 0, 0, 0)
+Start-Sleep -Milliseconds 80
+[WinAPI]::mouse_event(0x0004, 0, 0, 0, 0)
+Start-Sleep -Milliseconds 500
+Write-Host "REMOVE_COMPLETE"
+`;
+    const tmp = require('os').tmpdir() + '\\gopro_remove_queue.ps1';
+    fs.writeFileSync(tmp, removeScript, 'utf8');
+    const rp = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tmp], { stdio: 'pipe' });
+    rp.on('close', () => { fs.unlink(tmp, () => {}); resolve(); });
+    rp.on('error', () => { fs.unlink(tmp, () => {}); resolve(); });
+  });
+
+  try {
+    setStatus({ state: 'running', lastActivity: `Dual mode — Pass 1 of 2 (Regular) at ${nowTime()}` });
+    const ok1 = await runPass(buildPs(hlOff, clearQueueStep), firstStart, 'Dual Pass 1 of 2 (Regular)');
+    if (!ok1) { safeSend('gopro-export-error', { error: 'Dual mode: Pass 1 (Regular) did not finish.' }); return; }
+    try { performMove({ videosFolder: outputDir, stabilizedFolder: stabilizedPath, robotStartTime: firstStart }); } catch (e) {}
+    await clearQueue();
+
+    const hlFolder = path.join(stabilizedPath, 'HORIZON LOCK');
+    try { fs.mkdirSync(hlFolder, { recursive: true }); } catch (e) {}
+    const secondStart = Date.now();
+    setStatus({ state: 'running', lastActivity: `Dual mode — Pass 2 of 2 (Horizon Lock) at ${nowTime()}` });
+    const ok2 = await runPass(buildPs(hlOn, clearQueueStep), secondStart, 'Dual Pass 2 of 2 (Horizon Lock)');
+    if (!ok2) { safeSend('gopro-export-error', { error: 'Dual mode: Pass 2 (Horizon Lock) did not finish. Regular clips are already saved to STABILIZED.' }); return; }
+    try { performMove({ videosFolder: outputDir, stabilizedFolder: hlFolder, robotStartTime: secondStart }); } catch (e) {}
+    await clearQueue();
+
+    setStatus({ state: 'complete', lastActivity: `Dual stabilize complete — Regular + Horizon Lock at ${nowTime()}` });
+    safeSend('gopro-remove-complete');
+  } catch (e) {
+    setStatus({ state: 'error', lastActivity: `Dual mode error: ${e && e.message} at ${nowTime()}` });
+    safeSend('gopro-export-error', { error: 'Dual mode error: ' + (e && e.message) });
+  }
+}
+
 ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => {
   try {
     const outputDir = goProOutputPath || 'C:\\Users\\Jason\\Videos';
@@ -721,7 +819,7 @@ ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath,
       lastActivity: `Robot started for ${activeJob.cardId || 'card'} at ${nowTime()}`,
     });
 
-const psScript = `Add-Type -TypeDefinition @'
+const buildPs = (horizonLockStep, clearQueueStep) => `Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 [StructLayout(LayoutKind.Sequential)]
@@ -1039,6 +1137,13 @@ Click-GoPro -x ${aspectRatio8x7.x} -y ${aspectRatio8x7.y} -delayMs 800
 # Step 8 — Click Start export
 Click-GoPro -x ${start.x} -y ${start.y} -delayMs 1000
 `;
+
+    const psScript = buildPs(horizonLockStep, clearQueueStep);
+
+    if (meta && meta.dual) {
+      runDualMode({ buildPs, horizonLock, clearQueueStep, removeQueue, outputDir, stabilizedPath, expectedCount, firstStart: robotStartTime, sender: event.sender });
+      return { success: true, message: 'Dual robot launched - do not touch mouse or keyboard.', robotStartTime, dual: true };
+    }
 
     const tmpScript = require('os').tmpdir() + '\\gopro_robot.ps1';
     fs.writeFileSync(tmpScript, psScript, 'utf8');

@@ -892,7 +892,7 @@ export default function Dashboard() {
         localStabilizedPath,
         config.goProAppPath,
         config.goProOutputPath || 'C:\\Users\\Jason\\Videos',
-        { cardId: currentCardId, pilotName: selectedPilot, artistName: activeAssignmentName, horizonLock: !!config.horizonLock }
+        { cardId: currentCardId, pilotName: selectedPilot, artistName: activeAssignmentName, horizonLock: !!config.horizonLock, dual: !!config.dualMode }
       );
     } catch (err: unknown) {
       setGoProRobotStatus('error');
@@ -3144,6 +3144,31 @@ export default function Dashboard() {
                   {config.horizonLock && !config.robotCoords?.horizonLock && (
                     <p className="text-[11px] font-bold text-amber-400">
                       ⚠ Re-run 🎯 Calibrate GoPro Robot in Setup to capture the Horizon Lock click point — it won’t toggle until then.
+                    </p>
+                  )}
+                </div>
+
+                {/* ── DUAL MODE — run BOTH regular and Horizon Lock in two passes ── */}
+                <div className="w-full rounded-2xl border border-violet-700/60 bg-violet-950/30 p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-black uppercase tracking-widest text-violet-300">Dual Mode — Both</span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">When ON, the robot runs every clip twice: regular clips go to STABILIZED, then Horizon Lock clips go to a HORIZON LOCK subfolder. Takes about twice as long.</p>
+                    </div>
+                    <button
+                      onClick={() => setConfig(prev => ({ ...prev, dualMode: !prev.dualMode }))}
+                      className={`shrink-0 px-6 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition border-2 ${
+                        config.dualMode
+                          ? 'bg-violet-500 text-slate-950 border-violet-500 shadow-[0_0_18px_rgba(139,92,246,0.4)]'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                      }`}
+                    >
+                      {config.dualMode ? '🔁 ON' : 'OFF'}
+                    </button>
+                  </div>
+                  {config.dualMode && !config.robotCoords?.horizonLock && (
+                    <p className="text-[11px] font-bold text-amber-400">
+                      ⚠ Re-run 🎯 Calibrate GoPro Robot in Setup to capture the Horizon Lock point — Dual Mode needs it for the second pass.
                     </p>
                   )}
                 </div>

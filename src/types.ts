@@ -67,6 +67,9 @@ export interface FpvConfig {
   // When true, the GoPro robot toggles Horizon Lock ON in the batch exporter
   // (requires the 'horizonLock' calibration point to be captured).
   horizonLock?: boolean;
+  // When true, "Dual" stabilize mode runs each clip twice — regular, then Horizon
+  // Lock — saving the Horizon Lock versions into a STABILIZED\HORIZON LOCK subfolder.
+  dualMode?: boolean;
   sdCardDrive: string;
   goProAppPath: string;
   goProOutputPath?: string;
