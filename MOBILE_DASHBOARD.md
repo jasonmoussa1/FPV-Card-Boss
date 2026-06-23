@@ -14,6 +14,19 @@ No cloud, no Telegram; everything stays on your network.
 3. Use the toggle to pick **Auto** (auto‑move when the export count matches) or
    **Manual**, and tap **Move Files** when complete.
 
+## Site Map
+Share the venue/site map with the phone so everyone can pull it up in one place:
+1. On the desktop, open **Setup → 📱 Mobile Dashboard (PWA) → 🗺️ Site Map** and
+   click **Add Site Map**. Pick a PNG/JPG (WEBP, GIF, BMP and SVG also work). A
+   preview appears; use **Replace** or **Remove** anytime.
+2. On the phone, tap the **🗺️ Site Map** card on the home screen to view it. Tap
+   the image to open it full‑screen and pinch‑zoom.
+
+The image is stored on the computer and served at `/sitemap`; replacing it updates
+every connected phone live (the home card shows when a map is available). It
+persists across restarts, and the phone keeps the last‑loaded map cached so it
+opens even with the computer off.
+
 ## Windows Firewall
 The first time the server starts, Windows may prompt to allow network access —
 choose **Allow** (at least **Private networks**). If you dismissed it or it never

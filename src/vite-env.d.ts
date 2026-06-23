@@ -14,6 +14,9 @@ interface ElectronBridge {
   runGoProRobot(coords: any, rawPath: string, stabilizedPath: string, goProPath: string, goProOutputPath?: string, meta?: { cardId: string; pilotName: string; artistName: string; horizonLock?: boolean }): Promise<{ success: boolean; message: string; robotStartTime?: number }>;
   dashboardGetInfo(): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; movePassword?: string; tailscaleHttpsUrl?: string }>;
   dashboardSetMovePassword(pw: string): Promise<{ ok: boolean; movePassword: string }>;
+  dashboardSetSitemap(srcPath?: string): Promise<{ ok: boolean; canceled?: boolean; error?: string; hasSiteMap?: boolean; version?: number; ext?: string; port?: number }>;
+  dashboardClearSitemap(): Promise<{ ok: boolean; error?: string; hasSiteMap?: boolean; version?: number; ext?: string; port?: number }>;
+  dashboardGetSitemapInfo(): Promise<{ hasSiteMap: boolean; version: number; ext: string; port: number }>;
   dashboardSetPort(port: number): Promise<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; error?: string }>;
   dashboardSetMoveMode(mode: 'auto' | 'manual'): Promise<{ ok?: boolean; moveMode?: 'auto' | 'manual'; error?: string }>;
   onDashboardStatus(callback: (status: { moveMode?: 'auto' | 'manual'; [k: string]: unknown }) => void): void;

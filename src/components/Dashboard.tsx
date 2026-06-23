@@ -190,6 +190,7 @@ export default function Dashboard() {
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [isShotListOpen, setIsShotListOpen] = useState<boolean>(false);
   const [isManualOpen, setIsManualOpen] = useState<boolean>(false);
+  const [isSiteMapOpen, setIsSiteMapOpen] = useState<boolean>(false);
   const [dashboardInfo, setDashboardInfo] = useState<{ port: number; running: boolean; urls: { label: string; url: string }[]; moveMode: 'auto' | 'manual'; tailscaleHttpsUrl?: string } | null>(null);
   // AUTO / MANUAL mode (mirrors main.cjs's moveMode; settable from desktop or phone).
   const [moveMode, setMoveMode] = useState<'auto' | 'manual'>('manual');
@@ -200,6 +201,10 @@ export default function Dashboard() {
   const [mobileAlerts, setMobileAlerts] = useState<{ id: number; name: string; status: string }[]>([]);
   const [dashboardPortInput, setDashboardPortInput] = useState<string>('8723');
   const [movePasswordInput, setMovePasswordInput] = useState<string>('');
+  // Site map (venue map image shown on the phone). version bumps on each replace
+  // so the desktop preview busts its cache; busy guards the picker/copy round-trip.
+  const [siteMapInfo, setSiteMapInfo] = useState<{ hasSiteMap: boolean; version: number; port: number } | null>(null);
+  const [siteMapBusy, setSiteMapBusy] = useState<boolean>(false);
   const [historyPilotFilter, setHistoryPilotFilter] = useState<string>('ALL');
   const [copyProgress, setCopyProgress] = useState<number | null>(null);
   const [mediaCopyProgress, setMediaCopyProgress] = useState<number | null>(null);
@@ -433,9 +438,43 @@ export default function Dashboard() {
       try {
         const info = await window.electron?.dashboardGetInfo();
         if (info) { setDashboardInfo(info); setDashboardPortInput(String(info.port ?? 8723)); setMovePasswordInput(info.movePassword ?? ''); if (info.moveMode === 'auto' || info.moveMode === 'manual') setMoveMode(info.moveMode); }
+        const sm = await window.electron?.dashboardGetSitemapInfo();
+        if (sm) setSiteMapInfo({ hasSiteMap: sm.hasSiteMap, version: sm.version, port: sm.port });
       } catch {}
     })();
   }, []);
+
+  // Close the expanded site map view with Escape (matches the Manual modal).
+  useEffect(() => {
+    if (!isSiteMapOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsSiteMapOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSiteMapOpen]);
+
+  // Site map: pick/replace (opens a file dialog on the computer) and remove. The
+  // image is stored by main and served to phones at /sitemap; the desktop previews
+  // it through the local dashboard server so it matches exactly what the phone sees.
+  const addOrReplaceSitemap = async () => {
+    if (siteMapBusy) return;
+    setSiteMapBusy(true);
+    try {
+      const r = await window.electron?.dashboardSetSitemap();
+      if (r && r.ok) setSiteMapInfo({ hasSiteMap: true, version: r.version ?? 0, port: r.port ?? (siteMapInfo?.port ?? 8723) });
+      else if (r && !r.canceled && r.error) alert(r.error);
+    } catch { /* ignore */ }
+    setSiteMapBusy(false);
+  };
+  const removeSitemap = async () => {
+    if (siteMapBusy) return;
+    if (!confirm('Remove the site map? The phone will no longer show it.')) return;
+    setSiteMapBusy(true);
+    try {
+      const r = await window.electron?.dashboardClearSitemap();
+      if (r && r.ok) setSiteMapInfo({ hasSiteMap: false, version: r.version ?? 0, port: r.port ?? (siteMapInfo?.port ?? 8723) });
+    } catch { /* ignore */ }
+    setSiteMapBusy(false);
+  };
 
   // Phone marked a shot done/skipped → ding + a RED blinking-light alert so the
   // operator knows that artist's footage is completed (or skipped) and coming over.
@@ -1654,6 +1693,15 @@ export default function Dashboard() {
           >
             📖 <span>Manual</span>
           </button>
+          {siteMapInfo?.hasSiteMap && (
+            <button
+              onClick={() => setIsSiteMapOpen(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl border border-emerald-400/40 bg-emerald-400/10 hover:bg-emerald-400/20 text-emerald-300 text-base font-black transition"
+              title="View the venue / site map"
+            >
+              🗺️ <span>Site Map</span>
+            </button>
+          )}
           <label className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-base font-black cursor-pointer transition">
             <Upload className="w-5 h-5" />
             <span>Import CSV</span>
@@ -2158,6 +2206,44 @@ export default function Dashboard() {
               </div>
 
               <PhoneAccessPanel httpsUrl={dashboardInfo?.tailscaleHttpsUrl} urls={dashboardInfo?.urls ?? []} />
+
+              {/* 🗺️ SITE MAP — add a venue map image here; it shows on the phone's
+                  "Site Map" card. Replacing it updates every connected phone live. */}
+              <div className="space-y-3 bg-slate-950 rounded-2xl p-4 border border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🗺️</span>
+                  <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Site Map</p>
+                  {siteMapInfo?.hasSiteMap && (
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest bg-emerald-500/20 text-emerald-400">● On phone</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 -mt-1">Add a PNG/JPG of the venue or site map. It appears on the phone companion under <strong className="text-slate-300">Site Map</strong> — view it in one place, no computer needed once loaded.</p>
+
+                {siteMapInfo?.hasSiteMap && siteMapInfo.port ? (
+                  <a href={`http://127.0.0.1:${siteMapInfo.port}/sitemap?v=${siteMapInfo.version}`} target="_blank" rel="noopener noreferrer"
+                    className="block rounded-xl overflow-hidden border border-slate-700 bg-black/30">
+                    <img src={`http://127.0.0.1:${siteMapInfo.port}/sitemap?v=${siteMapInfo.version}`} alt="Site map preview" className="w-full max-h-64 object-contain" />
+                  </a>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-700 bg-black/20 px-4 py-8 text-center">
+                    <p className="text-[11px] text-slate-500">No site map added yet.</p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={addOrReplaceSitemap} disabled={siteMapBusy}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black rounded-xl uppercase tracking-widest transition">
+                    {siteMapBusy ? 'Working…' : siteMapInfo?.hasSiteMap ? '↻ Replace Site Map' : '＋ Add Site Map'}
+                  </button>
+                  {siteMapInfo?.hasSiteMap && (
+                    <button onClick={removeSitemap} disabled={siteMapBusy}
+                      className="px-4 py-2 bg-slate-800 hover:bg-rose-600/80 disabled:opacity-50 text-rose-300 hover:text-white text-xs font-black rounded-xl uppercase tracking-widest transition">
+                      🗑 Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <p className="text-[10px] font-mono text-slate-600 mt-1 px-1">Completion mode (set here or from the phone): <span className={moveMode === 'auto' ? 'text-emerald-400' : 'text-cyan-400'}>{moveMode.toUpperCase()}</span></p>
             </div>
           </div>
@@ -4069,6 +4155,44 @@ export default function Dashboard() {
       />
 
       <UserManual isOpen={isManualOpen} onClose={() => setIsManualOpen(false)} />
+
+      {/* 🗺️ SITE MAP — expanded in-app view, opened from the top-bar button. */}
+      {isSiteMapOpen && (
+        <div className="fixed inset-0 z-[9000] bg-black/85 backdrop-blur-md flex items-stretch justify-center p-2 sm:p-6"
+          onClick={() => setIsSiteMapOpen(false)}>
+          <div className="bg-slate-950 rounded-3xl w-full max-w-5xl h-full flex flex-col overflow-hidden shadow-2xl border border-slate-800"
+            onClick={e => e.stopPropagation()}>
+            {/* HEADER */}
+            <div className="px-5 sm:px-7 py-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-950/70">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ background: 'linear-gradient(135deg,#00e5ff,#b44fff)' }}>🗺️</span>
+                <div>
+                  <h2 className="text-lg md:text-xl font-black tracking-widest text-white">SITE MAP</h2>
+                  <p className="text-[11px] text-slate-500 -mt-0.5">Venue / site map — also shown on the phone companion</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {siteMapInfo?.hasSiteMap && siteMapInfo.port && (
+                  <a href={`http://127.0.0.1:${siteMapInfo.port}/sitemap?v=${siteMapInfo.version}`} target="_blank" rel="noopener noreferrer"
+                    className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-sm font-black transition hover:bg-emerald-500/30">
+                    ⤢ Open in window
+                  </a>
+                )}
+                <button onClick={() => setIsSiteMapOpen(false)} className="px-3.5 py-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 text-base font-black transition hover:bg-rose-500/30">✕</button>
+              </div>
+            </div>
+            {/* BODY */}
+            <div className="flex-grow overflow-auto p-3 sm:p-5 flex items-center justify-center">
+              {siteMapInfo?.hasSiteMap && siteMapInfo.port ? (
+                <img src={`http://127.0.0.1:${siteMapInfo.port}/sitemap?v=${siteMapInfo.version}`} alt="Site map"
+                  className="max-w-full max-h-full object-contain rounded-xl" />
+              ) : (
+                <p className="text-sm text-slate-500">No site map added yet. Add one in the dashboard settings.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

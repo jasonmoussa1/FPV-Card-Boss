@@ -46,7 +46,7 @@ function detectUrls(port) {
 // returned by /state so we can confirm the phone is loading the FRESH page (not a
 // stale service-worker cache). If the phone footer shows an older stamp, its PWA
 // cache is stale → remove/re-add the app or clear site data.
-const PAGE_BUILD = 'pwa-2026-06-02-y-notes-sync';
+const PAGE_BUILD = 'pwa-2026-06-04-sitemap';
 // When this server process started — proves the phone is talking to a fresh run.
 const SERVER_STARTED = new Date().toISOString();
 
@@ -217,6 +217,11 @@ const PAGE = `<!DOCTYPE html>
   .homecard.shots{border-color:rgba(0,229,255,.35);box-shadow:0 0 18px rgba(0,229,255,.10);}
   .homecard.slate{border-color:rgba(180,79,255,.35);box-shadow:0 0 18px rgba(180,79,255,.10);}
   .homecard.move{border-color:rgba(255,176,32,.35);box-shadow:0 0 18px rgba(255,176,32,.10);}
+  .homecard.map{border-color:rgba(0,255,136,.30);box-shadow:0 0 18px rgba(0,255,136,.08);}
+  /* Site map viewer */
+  .mapwrap{margin-top:4px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#0b0d12;}
+  .mapwrap img{display:block;width:100%;height:auto;}
+  .mapempty{padding:34px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;}
   .slmini.csv{border-color:rgba(180,79,255,.35);color:var(--purple);}
   .hc-ic{font-size:30px;line-height:1;}
   .hc-tx{display:flex;flex-direction:column;}
@@ -265,6 +270,10 @@ const PAGE = `<!DOCTYPE html>
       <button class="homecard slate" onclick="openSimpleSlate()">
         <span class="hc-ic">🎬</span>
         <span class="hc-tx"><span class="hc-t">Simple Slate</span><span class="hc-d">Open the festival slate on its own — type artist/stage and go.</span></span>
+      </button>
+      <button class="homecard map" id="homeMapCard" onclick="openMap()">
+        <span class="hc-ic">🗺️</span>
+        <span class="hc-tx"><span class="hc-t">Site Map</span><span class="hc-d" id="homeMapDesc">View the venue site map added on the computer.</span></span>
       </button>
       <button class="homecard move" onclick="openMove()">
         <span class="hc-ic">🔒</span>
@@ -334,6 +343,13 @@ const PAGE = `<!DOCTYPE html>
       </div>
       <div class="sub" id="slSummary" style="margin-top:10px"></div>
       <div id="slList"></div>
+    </div>
+
+    <!-- SITE MAP (image added on the computer; tap to open full-screen & pinch-zoom) -->
+    <div id="mapPanel" style="display:none">
+      <div class="slhead"><h2>🗺️ SITE MAP</h2><button class="slclose" onclick="showHome()">‹ Back</button></div>
+      <div id="mapBody"></div>
+      <div class="hint" id="mapHint" style="margin-top:10px">Tap the image to open it full-screen and pinch-zoom.</div>
     </div>
     <div class="hint" id="buildStamp">build ${PAGE_BUILD}</div>
   </div>
@@ -463,14 +479,41 @@ const PAGE = `<!DOCTYPE html>
     el('delSdD').textContent = appStatus.deleteSdAvailable ? (appStatus.deleteSdDest||'') : (appStatus.deleteSdHint||'After raws are backed up');
 
     el('activity').textContent = appStatus.lastActivity || '';
+
+    // Site map: reflect availability on the home card + refresh the viewer if open.
+    if(el('homeMapDesc')) el('homeMapDesc').textContent = appStatus.hasSiteMap
+      ? 'View the venue site map added on the computer.'
+      : 'No site map added on the computer yet.';
+    if(el('mapPanel') && el('mapPanel').style.display!=='none') renderMap(false);
   }
 
   // ── NAVIGATION: Home / Shot List & Slate / Move Files ──
   // Remember the current view so returning from the slate (or a reload) lands you
   // back where you were instead of always on Home.
   function setView(v){ try{ sessionStorage.setItem('fpvcb_view', v); }catch(e){} }
-  function showHome(){ el('home').style.display='flex'; el('slPanel').style.display='none'; el('movePanel').style.display='none'; slEditId=null; setView('home'); }
-  function openShotList(){ el('home').style.display='none'; el('movePanel').style.display='none'; el('slPanel').style.display='block'; setView('shots'); loadShots(); renderShotlist(); }
+  function showHome(){ el('home').style.display='flex'; el('slPanel').style.display='none'; el('movePanel').style.display='none'; el('mapPanel').style.display='none'; slEditId=null; setView('home'); }
+  function openShotList(){ el('home').style.display='none'; el('movePanel').style.display='none'; el('mapPanel').style.display='none'; el('slPanel').style.display='block'; setView('shots'); loadShots(); renderShotlist(); }
+
+  // ── SITE MAP — image added on the computer, served at /sitemap. ──
+  // Rebuild the <img> only when the version changes so polling doesn't reload it
+  // (which would flicker / re-download). Tapping opens the raw image full-screen.
+  var mapShownVersion=-1, mapShownHas=null;
+  function siteMapSrc(){ return '/sitemap?v='+(appStatus.siteMapVersion||0); }
+  function renderMap(force){
+    var has=!!appStatus.hasSiteMap, ver=appStatus.siteMapVersion||0;
+    if(!force && has===mapShownHas && ver===mapShownVersion) return; // unchanged
+    mapShownHas=has; mapShownVersion=ver;
+    var body=el('mapBody'); if(!body) return;
+    if(has){
+      var src=siteMapSrc();
+      body.innerHTML='<a class="mapwrap" href="'+src+'" target="_blank" rel="noopener"><img src="'+src+'" alt="Site map"></a>';
+      if(el('mapHint')) el('mapHint').style.display='block';
+    } else {
+      body.innerHTML='<div class="mapwrap"><div class="mapempty">No site map has been added yet.<br>Add one on the computer:<br><b>Setup → Mobile Dashboard → Site Map</b>.</div></div>';
+      if(el('mapHint')) el('mapHint').style.display='none';
+    }
+  }
+  function openMap(){ el('home').style.display='none'; el('slPanel').style.display='none'; el('movePanel').style.display='none'; el('mapPanel').style.display='block'; setView('map'); renderMap(true); }
   // Move Files is password-gated; the password is set on the computer.
   function revealMove(){ el('home').style.display='none'; el('slPanel').style.display='none'; el('movePanel').style.display='block'; setView('move'); deliverMode='manual'; paintDeliverMode(); poll(); }
   function openMove(){
@@ -738,6 +781,7 @@ const PAGE = `<!DOCTYPE html>
     var v=null; try{ v=sessionStorage.getItem('fpvcb_view'); }catch(e){}
     var unlocked=false; try{ unlocked=sessionStorage.getItem('fpvcb_unlocked')==='1'; }catch(e){}
     if(v==='shots') openShotList();
+    else if(v==='map') openMap();
     else if(v==='move' && unlocked) revealMove();
     else showHome();
   })();
@@ -750,7 +794,7 @@ const PAGE = `<!DOCTYPE html>
 </html>`;
 
 // ── Server factory ───────────────────────────────────────────────────────────
-function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlist, onShotlistCommand, isMoveLocked, checkMovePassword, onNotify }) {
+function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlist, onShotlistCommand, isMoveLocked, checkMovePassword, onNotify, getSiteMap }) {
   const app = express();
   let server = null;
   let wss = null;
@@ -789,6 +833,17 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
   // / service-worker cache. If this shows the right pilot/state but the app screen
   // doesn't, the app's cached page is stale (remove & re-add the PWA).
   app.get('/state', (_req, res) => { noStore(res); res.json({ pageBuild: PAGE_BUILD, serverStarted: SERVER_STARTED, status: getSnapshot() }); });
+  // Site map image (PNG/JPG/…): the venue map added on the computer. Phones load
+  // this at /sitemap?v=<version>. Cacheable per version (ETag) so it isn't re-fetched
+  // every poll, but a new upload bumps the version and busts the cache. 404 when none.
+  app.get('/sitemap', (_req, res) => {
+    const sm = getSiteMap ? getSiteMap() : null;
+    if (!sm || !sm.buffer || !sm.buffer.length) { res.status(404).type('text').send('No site map'); return; }
+    res.set('Cache-Control', 'private, max-age=31536000, immutable');
+    res.set('ETag', 'sitemap-v' + sm.version);
+    res.type(sm.mime || 'image/png').send(sm.buffer);
+  });
+
   // Shot list: the desktop's CSV assignments (the phone's "Import from Computer").
   app.get('/shotlist', (_req, res) => { noStore(res); res.json({ items: (getShotlist ? getShotlist() : []) || [] }); });
   // Phone → desktop shot-list update: { id, patch:{ status } } so marking a shot

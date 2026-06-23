@@ -48,6 +48,12 @@ const status = {
   deleteSdState: 'idle',    // 'idle' | 'deleting' | 'success' | 'error'
   deleteSdHint: '',
   deleteSdDest: '',
+  // ── Site map (venue/site map image added on the computer, viewed on the phone) ──
+  // The desktop adds a PNG/JPG; main stores it and serves it at GET /sitemap. The
+  // phone polls these two fields and shows a "Site Map" card when one is present.
+  // siteMapVersion bumps on every replace so the phone busts its image cache.
+  hasSiteMap: false,
+  siteMapVersion: 0,
 };
 
 // Fields the desktop renderer is allowed to push into `status` via
@@ -77,6 +83,26 @@ let shotlist = [];
 // (shown in plain text), saved in dashboard-config.json. Empty = section is open.
 let movePassword = '';
 
+// ── Site map image ───────────────────────────────────────────────────────────
+// The operator adds a venue/site map image on the computer; it's stored verbatim
+// in userData (as sitemap.<ext>) and served to phones at GET /sitemap. We keep
+// only lightweight metadata here + on disk; the bytes are read on demand.
+let siteMap = { ext: '', mime: '', version: 0 }; // version 0 = none added yet
+function siteMapPath() {
+  try { return siteMap.ext ? path.join(app.getPath('userData'), 'sitemap.' + siteMap.ext) : null; }
+  catch { return null; }
+}
+function siteMapExists() {
+  const p = siteMapPath();
+  try { return !!p && fs.existsSync(p); } catch { return false; }
+}
+// Read the current site map bytes for the dashboard server. Returns null when none.
+function getSiteMap() {
+  if (!siteMapExists()) return null;
+  try { return { buffer: fs.readFileSync(siteMapPath()), mime: siteMap.mime || 'image/png', version: siteMap.version }; }
+  catch { return null; }
+}
+
 // Active job context — main keeps its OWN copy so it can move files (auto / from
 // the phone) without depending on the renderer's React state.
 let activeJob = null;     // { stabilizedFolder, videosFolder, robotStartTime, expectedCount, cardId, pilotName, artistName }
@@ -92,13 +118,25 @@ function loadDashboardConfig() {
       if (typeof cfg.port === 'number' && cfg.port > 0 && cfg.port < 65536) dashboardPort = cfg.port;
       if (cfg.moveMode === 'auto' || cfg.moveMode === 'manual') status.moveMode = cfg.moveMode;
       if (typeof cfg.movePassword === 'string') movePassword = cfg.movePassword;
+      if (cfg.siteMap && typeof cfg.siteMap === 'object') {
+        siteMap = {
+          ext: typeof cfg.siteMap.ext === 'string' ? cfg.siteMap.ext : '',
+          mime: typeof cfg.siteMap.mime === 'string' ? cfg.siteMap.mime : '',
+          version: typeof cfg.siteMap.version === 'number' ? cfg.siteMap.version : 0,
+        };
+        // Reflect into the broadcast status so the phone knows on first poll. Only
+        // claim a site map if the file is actually present on disk.
+        const present = siteMapExists();
+        status.hasSiteMap = present;
+        status.siteMapVersion = present ? siteMap.version : 0;
+      }
     }
   } catch {}
 }
 function saveDashboardConfig() {
   try {
     const p = dashboardConfigPath();
-    if (p) fs.writeFileSync(p, JSON.stringify({ port: dashboardPort, moveMode: status.moveMode, movePassword }, null, 2), 'utf8');
+    if (p) fs.writeFileSync(p, JSON.stringify({ port: dashboardPort, moveMode: status.moveMode, movePassword, siteMap }, null, 2), 'utf8');
   } catch {}
 }
 
@@ -191,6 +229,8 @@ app.whenReady().then(() => {
     onCommand: (cmd) => forwardToRenderer(cmd),
     getSnapshot: () => status,
     getShotlist: () => shotlist,
+    // Phone fetches the site map image bytes from GET /sitemap via this.
+    getSiteMap: () => getSiteMap(),
     // Move-files section gate: returns whether a password is required, and validates.
     isMoveLocked: () => movePassword.length > 0,
     checkMovePassword: (pw) => movePassword.length === 0 || String(pw) === movePassword,
@@ -1079,6 +1119,64 @@ ipcMain.handle('dashboard-set-move-password', (_event, pw) => {
   saveDashboardConfig();
   return { ok: true, movePassword };
 });
+
+// ── Site map: add/replace/clear/info ─────────────────────────────────────────
+// MIME by extension for the handful of image types a site map is ever exported as.
+const SITE_MAP_MIME = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+};
+function siteMapInfo() {
+  const present = siteMapExists();
+  return { hasSiteMap: present, version: present ? siteMap.version : 0, ext: present ? siteMap.ext : '', port: dashboardPort };
+}
+// Desktop adds/replaces the site map. With a path argument it uses that file
+// (drag-and-drop on the desktop); with none it opens a picker.
+ipcMain.handle('dashboard-set-sitemap', async (_event, srcPath) => {
+  try {
+    let src = typeof srcPath === 'string' ? srcPath : '';
+    if (!src) {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Choose a Site Map image',
+        properties: ['openFile'],
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'] }],
+      });
+      if (canceled || !filePaths || !filePaths[0]) return { ok: false, canceled: true };
+      src = filePaths[0];
+    }
+    if (!fs.existsSync(src)) return { ok: false, error: 'That file no longer exists.' };
+    const ext = path.extname(src).replace(/^\./, '').toLowerCase();
+    const mime = SITE_MAP_MIME['.' + ext];
+    if (!mime) return { ok: false, error: 'Unsupported image type. Use PNG, JPG, WEBP, GIF, BMP or SVG.' };
+
+    // Remove any previous site map file (extension may differ from the new one).
+    const oldPath = siteMapPath();
+    if (oldPath && fs.existsSync(oldPath)) { try { fs.unlinkSync(oldPath); } catch {} }
+
+    const nextVersion = (siteMap.version || 0) + 1;
+    siteMap = { ext, mime, version: nextVersion };
+    fs.copyFileSync(src, siteMapPath());
+    saveDashboardConfig();
+    // Broadcast so every connected phone refreshes the image immediately.
+    setStatus({ hasSiteMap: true, siteMapVersion: nextVersion, lastActivity: `Site map updated at ${nowTime()}` });
+    return { ok: true, ...siteMapInfo() };
+  } catch (err) {
+    return { ok: false, error: err && err.message };
+  }
+});
+ipcMain.handle('dashboard-clear-sitemap', () => {
+  try {
+    const p = siteMapPath();
+    if (p && fs.existsSync(p)) { try { fs.unlinkSync(p); } catch {} }
+    siteMap = { ext: '', mime: '', version: siteMap.version || 0 }; // keep version monotonic
+    saveDashboardConfig();
+    setStatus({ hasSiteMap: false, siteMapVersion: 0, lastActivity: `Site map removed at ${nowTime()}` });
+    return { ok: true, ...siteMapInfo() };
+  } catch (err) {
+    return { ok: false, error: err && err.message };
+  }
+});
+ipcMain.handle('dashboard-get-sitemap-info', () => siteMapInfo());
 // The desktop renderer pushes its live delivery state (which destinations are
 // available + their copy/dump progress) so the phone's buttons mirror the desktop.
 ipcMain.handle('dashboard-report-state', (_event, patch) => {

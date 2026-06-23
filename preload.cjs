@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('electron', {
   dashboardSetMoveMode: (mode) => ipcRenderer.invoke('dashboard-set-move-mode', mode),
   // Desktop sets the simple password that gates the phone's Move Files section.
   dashboardSetMovePassword: (pw) => ipcRenderer.invoke('dashboard-set-move-password', pw),
+  // Site map (venue map image): add/replace (opens a picker, or pass a dropped path),
+  // remove, and query current info. Served to phones at /sitemap.
+  dashboardSetSitemap: (srcPath) => ipcRenderer.invoke('dashboard-set-sitemap', srcPath),
+  dashboardClearSitemap: () => ipcRenderer.invoke('dashboard-clear-sitemap'),
+  dashboardGetSitemapInfo: () => ipcRenderer.invoke('dashboard-get-sitemap-info'),
   // Live status pushed from main (so the desktop button mirrors phone-side changes).
   onDashboardStatus: (callback) => ipcRenderer.on('dashboard-status', (_event, data) => callback(data)),
   offDashboardStatus: () => ipcRenderer.removeAllListeners('dashboard-status'),
