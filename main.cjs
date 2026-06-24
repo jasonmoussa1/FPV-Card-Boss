@@ -358,7 +358,12 @@ function countFilesRecursive(dir) {
   return count;
 }
 
-async function waitForExportComplete(outputDir, robotStartTime, expectedCount, sender) {
+async function waitForExportComplete(outputDir, robotStartTime, expectedCount, sender, opts = {}) {
+  // final=false (dual intermediate pass): report live progress but do NOT fire the
+  // terminal complete/error — runDualMode owns finalization so the auto-chain and
+  // phone only complete once, after BOTH passes. passPrefix labels the phone progress.
+  const finalize = opts.final !== false;
+  const passPrefix = opts.passPrefix || '';
   const POLL_INTERVAL = 3000;
   const MAX_WAIT = 60 * 60 * 1000;
   const STABLE_CHECKS = 3;
@@ -395,9 +400,9 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
     }
 
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    const countLabel = expectedCount > 0
+    const countLabel = passPrefix + (expectedCount > 0
       ? `${files.length} of ${expectedCount} files`
-      : `${files.length} file(s)`;
+      : `${files.length} file(s)`);
 
     try {
       sender.send('gopro-export-progress', {
@@ -423,6 +428,7 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
       if (totalSize === lastTotalSize) {
         stableCount++;
         if (stableCount >= STABLE_CHECKS) {
+          if (!finalize) { return true; }
           try {
             sender.send('gopro-export-complete', {
               files: files.map(f => f.path),
@@ -461,12 +467,14 @@ async function waitForExportComplete(outputDir, robotStartTime, expectedCount, s
     }
   }
 
-  try {
-    if (!sender.isDestroyed()) {
-      sender.send('gopro-export-error', { error: 'Export timed out after 60 minutes' });
-    }
-  } catch {}
-  setStatus({ state: 'error', lastActivity: 'Export timed out after 60 minutes.' });
+  if (finalize) {
+    try {
+      if (!sender.isDestroyed()) {
+        sender.send('gopro-export-error', { error: 'Export timed out after 60 minutes' });
+      }
+    } catch {}
+    setStatus({ state: 'error', lastActivity: 'Export timed out after 60 minutes.' });
+  }
   return false;
 }
 
@@ -669,7 +677,7 @@ async function runDualMode({ buildPs, horizonLock, clearQueueStep, removeQueue, 
     : '\n# Step 3.5 — Horizon Lock not calibrated — skipped\n';
   const hlOff = '\n# Step 3.5 — Horizon Lock OFF (dual mode pass 1)\n';
 
-  const runPass = (script, passStart, label) => new Promise((resolve) => {
+  const runPass = (script, passStart, label, passPrefix) => new Promise((resolve) => {
     const tmp = require('os').tmpdir() + '\\gopro_robot.ps1';
     fs.writeFileSync(tmp, script, 'utf8');
     const robot = spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tmp], { stdio: 'pipe' });
@@ -686,7 +694,7 @@ async function runDualMode({ buildPs, horizonLock, clearQueueStep, removeQueue, 
       }
       safeSend('gopro-robot-status', { success: true, exitCode: code });
       setStatus({ lastActivity: `${label} — monitoring export at ${nowTime()}` });
-      const ok = await waitForExportComplete(outputDir, passStart, expectedCount, sender);
+      const ok = await waitForExportComplete(outputDir, passStart, expectedCount, sender, { final: false, passPrefix });
       resolve(ok);
     });
   });
@@ -729,21 +737,22 @@ Write-Host "REMOVE_COMPLETE"
 
   try {
     setStatus({ state: 'running', lastActivity: `Dual mode — Pass 1 of 2 (Regular) at ${nowTime()}` });
-    const ok1 = await runPass(buildPs(hlOff, clearQueueStep), firstStart, 'Dual Pass 1 of 2 (Regular)');
+    const ok1 = await runPass(buildPs(hlOff, clearQueueStep), firstStart, 'Dual Pass 1 of 2 (Regular)', 'Pass 1 of 2 (Regular) — ');
     if (!ok1) { safeSend('gopro-export-error', { error: 'Dual mode: Pass 1 (Regular) did not finish.' }); return; }
-    try { performMove({ videosFolder: outputDir, stabilizedFolder: stabilizedPath, robotStartTime: firstStart }); } catch (e) {}
+    let moved1 = 0; try { moved1 = (performMove({ videosFolder: outputDir, stabilizedFolder: stabilizedPath, robotStartTime: firstStart }) || {}).moved || 0; } catch (e) {}
     await clearQueue();
 
     const hlFolder = path.join(stabilizedPath, 'HORIZON LOCK');
     try { fs.mkdirSync(hlFolder, { recursive: true }); } catch (e) {}
     const secondStart = Date.now();
     setStatus({ state: 'running', lastActivity: `Dual mode — Pass 2 of 2 (Horizon Lock) at ${nowTime()}` });
-    const ok2 = await runPass(buildPs(hlOn, clearQueueStep), secondStart, 'Dual Pass 2 of 2 (Horizon Lock)');
+    const ok2 = await runPass(buildPs(hlOn, clearQueueStep), secondStart, 'Dual Pass 2 of 2 (Horizon Lock)', 'Pass 2 of 2 (Horizon Lock) — ');
     if (!ok2) { safeSend('gopro-export-error', { error: 'Dual mode: Pass 2 (Horizon Lock) did not finish. Regular clips are already saved to STABILIZED.' }); return; }
-    try { performMove({ videosFolder: outputDir, stabilizedFolder: hlFolder, robotStartTime: secondStart }); } catch (e) {}
+    let moved2 = 0; try { moved2 = (performMove({ videosFolder: outputDir, stabilizedFolder: hlFolder, robotStartTime: secondStart }) || {}).moved || 0; } catch (e) {}
     await clearQueue();
 
-    setStatus({ state: 'complete', lastActivity: `Dual stabilize complete — Regular + Horizon Lock at ${nowTime()}` });
+    setStatus({ state: 'complete', fileCount: moved2, expectedCount, countLabel: `Dual complete — ${moved1} regular + ${moved2} Horizon Lock`, lastMovedCount: moved1 + moved2, lastActivity: `Dual stabilize complete — ${moved1} regular + ${moved2} Horizon Lock at ${nowTime()}` });
+    safeSend('gopro-export-complete', { files: [], fileCount: moved2, expectedCount, countLabel: `Dual complete — ${moved1} + ${moved2}` });
     safeSend('gopro-remove-complete');
   } catch (e) {
     setStatus({ state: 'error', lastActivity: `Dual mode error: ${e && e.message} at ${nowTime()}` });
