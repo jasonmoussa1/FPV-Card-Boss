@@ -1393,8 +1393,10 @@ ipcMain.handle('copy-to-bella', async (event, { localStabilizedPath, bellaSocial
 
     return await new Promise((resolve, reject) => {
       const progressRe = /(\d+\.?\d*)\s*%/;
-      // /LEV:1 copies only top-level files — no subfolders created inside the artist folder
-      const proc = spawn('robocopy', [localStabilizedPath, bellaSocialPath, '/LEV:1', '/Z', '/W:5', '/R:3'], { windowsHide: true });
+      // /E copies STABILIZED recursively so the HORIZON LOCK subfolder (dual mode)
+      // is delivered too — regular clips land at the top level, Horizon Lock clips
+      // in a HORIZON LOCK subfolder (no filename collisions between the two).
+      const proc = spawn('robocopy', [localStabilizedPath, bellaSocialPath, '/E', '/Z', '/W:5', '/R:3'], { windowsHide: true });
 
       proc.stdout.on('data', (chunk) => {
         const match = chunk.toString().match(progressRe);
