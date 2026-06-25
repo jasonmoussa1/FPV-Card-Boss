@@ -12,7 +12,8 @@
     "dev:electron": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && electron .\"",
     "build:server": "esbuild dashboardServer.cjs --bundle --platform=node --format=cjs --outfile=dashboardServer.bundled.cjs --external:bufferutil --external:utf-8-validate",
     "build:slate": "vite build --config vite.slate.config.ts",
-    "build:exe": "tsc --noEmit && vite build && npm run build:slate && npm run build:server && electron-builder --win && node deploy.cjs"
+    "build:exe": "tsc --noEmit && vite build && npm run build:slate && npm run build:server && electron-builder --win && node deploy.cjs",
+    "build:mac": "tsc --noEmit && vite build && npm run build:slate && npm run build:server && electron-builder --mac"
   },
   "build": {
     "appId": "com.fpvcardboss.app",
@@ -26,11 +27,31 @@
       ],
       "icon": "assets/icon.ico"
     },
+    "mac": {
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "FPV Card Boss controls GoPro Player and Finder to automate the stabilization export.",
+        "NSAccessibilityUsageDescription": "FPV Card Boss moves the mouse and keyboard to drive GoPro Player's export."
+      }
+    },
+    "asarUnpack": [
+      "**/node_modules/@nut-tree-fork/**",
+      "**/node_modules/@nut-tree/**"
+    ],
     "files": [
       "dist/**/*",
       "dist-slate/**/*",
       "main.cjs",
       "preload.cjs",
+      "platform.cjs",
+      "mac-robot.cjs",
+      "mac-fs.cjs",
       "calibration.html",
       "dashboardServer.cjs",
       "dashboardServer.bundled.cjs",
@@ -39,6 +60,7 @@
     ]
   },
   "dependencies": {
+    "@emotion/is-prop-valid": "^1.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "express": "^5.2.1",
@@ -49,6 +71,9 @@
     "react-dom": "^19.0.1",
     "vite": "^6.2.3",
     "ws": "^8.21.0"
+  },
+  "optionalDependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

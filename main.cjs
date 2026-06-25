@@ -10,6 +10,13 @@ catch { ({ createDashboard } = require('./dashboardServer.cjs')); }
 // Cross-platform OS automation seam (Windows today; macOS wired in Phase 2).
 // Safe to require on Windows — nut.js is lazy-loaded inside platform.cjs.
 const platformLayer = require('./platform.cjs');
+// macOS file-operation equivalents (rsync copies, volume-safe SD delete). Safe to
+// require anywhere — it only uses fs/child_process; invoked only when on Mac.
+const macFs = require('./mac-fs.cjs');
+function isMacPlatform() {
+  try { return platformLayer.resolvePlatform(app.getPath('userData')) === 'mac'; }
+  catch { return process.platform === 'darwin'; }
+}
 
 // ── Live mobile dashboard: shared state ──────────────────────────────────────
 let mainWindow = null;
@@ -276,7 +283,7 @@ app.on('window-all-closed', () => {
 // GoPro Videos folder into the card's STABILIZED folder. ONE implementation,
 // used by the move-stabilized-files IPC handler AND moveNow().
 function performMove({ videosFolder, stabilizedFolder, robotStartTime }) {
-  const vDir = videosFolder || 'C:\\Users\\Jason\\Videos';
+  const vDir = videosFolder || (process.platform === 'darwin' ? path.join(require('os').homedir(), 'Movies') : 'C:\\Users\\Jason\\Videos');
   const entries = fs.readdirSync(vDir);
   const matched = entries
     .filter(f => f.toLowerCase().endsWith('.mp4'))
@@ -582,10 +589,15 @@ ipcMain.handle('set-platform', (_event, platform) => {
 });
 
 ipcMain.handle('get-cursor-pos', () => {
-  // Capture in PHYSICAL pixels (not logical/DIP). The robot is made DPI-aware and
-  // moves the mouse in physical pixels, so storing physical coordinates makes the
-  // calibration accurate on any display scaling (100% / 125% / 150%).
   const dip = screen.getCursorScreenPoint();
+  // macOS: nut.js drives the mouse in logical "points" — the same space Electron
+  // reports here — so return the DIP point directly. Converting to physical pixels
+  // would DOUBLE the coordinates on a Retina display and the robot would miss.
+  try {
+    if (platformLayer.resolvePlatform(app.getPath('userData')) === 'mac') return dip;
+  } catch {}
+  // Windows: capture in PHYSICAL pixels (the DPI-aware robot moves in physical
+  // pixels), keeping calibration accurate at 100% / 125% / 150% scaling.
   try {
     return screen.dipToScreenPoint(dip);
   } catch {
@@ -623,6 +635,7 @@ ipcMain.handle('open-folder', async (_event, folderPath) => {
 });
 
 ipcMain.handle('find-gopro-path', async () => {
+  if (isMacPlatform()) return macFs.findGoProPath();
   const knownPaths = [
     'C:\\Program Files\\GoPro\\Player\\GoPro Player.exe',
     'C:\\Program Files (x86)\\GoPro\\Player\\GoPro Player.exe',
@@ -794,8 +807,64 @@ Write-Host "REMOVE_COMPLETE"
   }
 }
 
+// macOS robot path: drives GoPro Player via nut.js (mac-robot.cjs). Mirrors the
+// Windows handler's activeJob/status setup so the file-move flow behaves the same.
+async function runMacRobot(event, coords, rawPath, stabilizedPath, goProOutputPath, meta) {
+  const os = require('os');
+  const outputDir = goProOutputPath || path.join(os.homedir(), 'Movies');
+  const robotStartTime = Date.now();
+
+  let expectedCount = 0;
+  try {
+    expectedCount = fs.readdirSync(rawPath).filter((f) => f.toLowerCase().endsWith('.mp4')).length;
+  } catch {}
+
+  activeJob = {
+    stabilizedFolder: stabilizedPath,
+    videosFolder: outputDir,
+    robotStartTime,
+    expectedCount,
+    cardId: (meta && meta.cardId) || '',
+    pilotName: (meta && meta.pilotName) || '',
+    artistName: (meta && meta.artistName) || '',
+  };
+  setStatus({
+    state: 'running',
+    cardId: activeJob.cardId,
+    pilotName: activeJob.pilotName,
+    artistName: activeJob.artistName,
+    fileCount: 0,
+    expectedCount,
+    totalSizeMB: 0,
+    countLabel: expectedCount > 0 ? `0 of ${expectedCount} files` : 'starting…',
+    lastMovedCount: 0,
+    lastActivity: `Mac robot started for ${activeJob.cardId || 'card'} at ${nowTime()}`,
+  });
+
+  const macRobot = require('./mac-robot.cjs');
+  const send = (ch, payload) => { try { if (event.sender && !event.sender.isDestroyed()) event.sender.send(ch, payload); } catch {} };
+
+  // Fire-and-forward like the Windows path: return immediately, report via events.
+  macRobot.runGoProExport(coords, {
+    rawPath,
+    horizonLock: !!(meta && meta.horizonLock),
+    onLog: (m) => send('gopro-robot-status', { success: true, exitCode: 0, info: m }),
+  })
+    .then(() => send('gopro-robot-status', { success: true, exitCode: 0 }))
+    .catch((e) => {
+      send('gopro-robot-status', { success: false, exitCode: 1, error: e && e.message });
+      send('gopro-export-error', { error: 'Mac robot error: ' + (e && e.message) });
+    });
+
+  return { success: true, message: 'Mac robot launched - do not touch mouse or keyboard.', robotStartTime, dual: false };
+}
+
 ipcMain.handle('run-gopro-robot', async (event, coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => {
   try {
+    // macOS uses the nut.js robot; the Windows PowerShell path below is unchanged.
+    if (platformLayer.resolvePlatform(app.getPath('userData')) === 'mac') {
+      return await runMacRobot(event, coords, rawPath, stabilizedPath, goProOutputPath, meta);
+    }
     const outputDir = goProOutputPath || 'C:\\Users\\Jason\\Videos';
     const { tenBit, hyperSmooth, smoothnessStart, smoothnessEnd, unGain, croppingStart, croppingEnd, aspectRatioOpen, aspectRatio8x7, start, dropZone, batchList, removeQueue, horizonLock } = coords;
 
@@ -1404,6 +1473,7 @@ ipcMain.handle('dashboard-set-port', (_event, port) => {
 
 ipcMain.handle('copy-to-media', async (event, { localRawPath, localStabilizedPath, mediaDrivePath }) => {
   try {
+    if (isMacPlatform()) return await macFs.copyToMedia(localRawPath, localStabilizedPath, mediaDrivePath, (p) => { try { event.sender.send('media-copy-progress', p); } catch {} });
     const progressRe = /(\d+\.?\d*)\s*%/;
 
     const runRobocopy = (src, dst, phaseOffset, phaseScale) => new Promise((resolve, reject) => {
@@ -1432,6 +1502,7 @@ ipcMain.handle('copy-to-media', async (event, { localRawPath, localStabilizedPat
 
 ipcMain.handle('copy-to-bella', async (event, { localStabilizedPath, bellaSocialPath }) => {
   try {
+    if (isMacPlatform()) return await macFs.copyToBella(localStabilizedPath, bellaSocialPath, (p) => { try { event.sender.send('bella-copy-progress', p); } catch {} });
     fs.mkdirSync(bellaSocialPath, { recursive: true });
 
     return await new Promise((resolve, reject) => {
@@ -1460,6 +1531,7 @@ ipcMain.handle('copy-to-bella', async (event, { localStabilizedPath, bellaSocial
 
 ipcMain.handle('copy-to-media-drive', async (event, { localStabilizedPath, mediaDrivePath, cardId }) => {
   try {
+    if (isMacPlatform()) return await macFs.copyToMediaDrive(localStabilizedPath, mediaDrivePath, cardId, (p) => { try { event.sender.send('media-drive-copy-progress', p); } catch {} });
     const localCardPath = path.dirname(localStabilizedPath);
     const progressRe = /(\d+\.?\d*)\s*%/;
 
@@ -1488,6 +1560,7 @@ ipcMain.handle('copy-to-media-drive', async (event, { localStabilizedPath, media
 
 ipcMain.handle('copy-to-bella-drive', async (event, { localStabilizedPath, bellaDestPath, artistName }) => {
   try {
+    if (isMacPlatform()) return await macFs.copyToBellaDrive(localStabilizedPath, bellaDestPath, artistName, (p) => { try { event.sender.send('bella-drive-copy-progress', p); } catch {} });
     if (!artistName || !artistName.trim()) {
       return {
         success: false,
@@ -1560,6 +1633,7 @@ ipcMain.handle('load-calibration', async () => {
 
 ipcMain.handle('copy-sd-to-raw', async (event, { sdDriveLetter, targetRawPath }) => {
   try {
+    if (isMacPlatform()) return await macFs.copySdToRaw(sdDriveLetter, targetRawPath, (p) => { try { event.sender.send('robocopy-progress', p); } catch {} });
     const source = sdDriveLetter.replace(/\\+$/, '') + '\\';
     // Count source files BEFORE robocopy runs
     const sourceFileCount = countFilesRecursive(source);
@@ -1634,6 +1708,7 @@ ipcMain.handle('copy-sd-to-raw', async (event, { sdDriveLetter, targetRawPath })
 // Hard safety guards refuse the system drive and any configured working drive.
 ipcMain.handle('delete-sd-raw-files', async (_event, { sdDrivePath, protectedRoots }) => {
   try {
+    if (isMacPlatform()) return macFs.deleteSdRawFiles(sdDrivePath, protectedRoots);
     const driveLetter = (p) => {
       const m = String(p || '').trim().match(/^([A-Za-z]):/);
       return m ? (m[1].toUpperCase() + ':') : '';
