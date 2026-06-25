@@ -8,6 +8,8 @@ interface ElectronBridge {
     invoke(channel: string, ...args: unknown[]): Promise<unknown>;
   };
   selectFolder(): Promise<string | null>;
+  getPlatform(): Promise<{ platform: 'mac' | 'win'; detected: 'mac' | 'win'; stored: 'mac' | 'win' | null }>;
+  setPlatform(platform: 'mac' | 'win'): Promise<{ success: boolean; platform?: 'mac' | 'win'; error?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   calibrateRobot(): Promise<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('electron', {
     invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
   },
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  // Cross-platform: which OS the app should behave as (PC/Mac picker).
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  setPlatform: (platform) => ipcRenderer.invoke('set-platform', platform),
   calibrateRobot: () => ipcRenderer.invoke('calibrate-robot'),
   runGoProRobot: (coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta) => ipcRenderer.invoke('run-gopro-robot', coords, rawPath, stabilizedPath, goProPath, goProOutputPath, meta),
   dashboardGetInfo: () => ipcRenderer.invoke('dashboard-get-info'),

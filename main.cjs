@@ -7,6 +7,9 @@ const { spawn, exec } = require('child_process');
 let createDashboard;
 try { ({ createDashboard } = require('./dashboardServer.bundled.cjs')); }
 catch { ({ createDashboard } = require('./dashboardServer.cjs')); }
+// Cross-platform OS automation seam (Windows today; macOS wired in Phase 2).
+// Safe to require on Windows — nut.js is lazy-loaded inside platform.cjs.
+const platformLayer = require('./platform.cjs');
 
 // ── Live mobile dashboard: shared state ──────────────────────────────────────
 let mainWindow = null;
@@ -544,6 +547,37 @@ ipcMain.handle('select-folder', async () => {
     return canceled ? null : filePaths[0];
   } catch (err) {
     return { success: false, message: err.message };
+  }
+});
+
+// ── Platform selection (PC / Mac) ───────────────────────────────────────────
+// Returns the resolved platform plus what was auto-detected and what (if
+// anything) the user explicitly chose, so the renderer's picker can pre-select.
+ipcMain.handle('get-platform', () => {
+  try {
+    const userData = app.getPath('userData');
+    return {
+      platform: platformLayer.resolvePlatform(userData),
+      detected: platformLayer.detectPlatform(),
+      stored: platformLayer.getStoredPlatform(userData),
+    };
+  } catch {
+    const detected = platformLayer.detectPlatform();
+    return { platform: detected, detected, stored: null };
+  }
+});
+
+// Persist the user's PC/Mac choice. Windows behaviour is unchanged regardless;
+// this drives which automation path Phase 2 takes and which UI hints show.
+ipcMain.handle('set-platform', (_event, platform) => {
+  try {
+    if (platform !== 'mac' && platform !== 'win') {
+      return { success: false, error: 'invalid platform' };
+    }
+    platformLayer.setStoredPlatform(app.getPath('userData'), platform);
+    return { success: true, platform };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 

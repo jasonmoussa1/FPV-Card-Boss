@@ -4,9 +4,12 @@
  */
 
 import Dashboard from './components/Dashboard';
+import PlatformGate from './components/PlatformGate';
 
 export default function App() {
   return (
-    <Dashboard />
+    <PlatformGate>
+      <Dashboard />
+    </PlatformGate>
   );
 }
