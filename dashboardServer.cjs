@@ -46,7 +46,7 @@ function detectUrls(port) {
 // returned by /state so we can confirm the phone is loading the FRESH page (not a
 // stale service-worker cache). If the phone footer shows an older stamp, its PWA
 // cache is stale → remove/re-add the app or clear site data.
-const PAGE_BUILD = 'pwa-2026-06-04-sitemap';
+const PAGE_BUILD = 'pwa-2026-06-25-livesync';
 // When this server process started — proves the phone is talking to a fresh run.
 const SERVER_STARTED = new Date().toISOString();
 
@@ -333,7 +333,7 @@ const PAGE = `<!DOCTYPE html>
       <div class="slrow2">
         <button class="slmini add" onclick="slToggleAdd()">➕ Add Shot</button>
         <button class="slmini csv" onclick="slCsvToggle()">📄 Add CSV</button>
-        <button class="slmini imp" onclick="slImport()">⤵ Import PC</button>
+        <span class="m" id="slSyncHint" style="align-self:center;opacity:.65;font-size:11px">↻ Live-synced with the computer</span>
       </div>
       <div id="slAddForm" style="display:none"></div>
       <div id="slCsvForm" style="display:none"></div>
@@ -492,7 +492,7 @@ const PAGE = `<!DOCTYPE html>
   // back where you were instead of always on Home.
   function setView(v){ try{ sessionStorage.setItem('fpvcb_view', v); }catch(e){} }
   function showHome(){ el('home').style.display='flex'; el('slPanel').style.display='none'; el('movePanel').style.display='none'; el('mapPanel').style.display='none'; slEditId=null; setView('home'); }
-  function openShotList(){ el('home').style.display='none'; el('movePanel').style.display='none'; el('mapPanel').style.display='none'; el('slPanel').style.display='block'; setView('shots'); loadShots(); renderShotlist(); }
+  function openShotList(){ el('home').style.display='none'; el('movePanel').style.display='none'; el('mapPanel').style.display='none'; el('slPanel').style.display='block'; setView('shots'); loadShots(); renderShotlist(); slAutoSync(); }
 
   // ── SITE MAP — image added on the computer, served at /sitemap. ──
   // Rebuild the <img> only when the version changes so polling doesn't reload it
@@ -611,6 +611,80 @@ const PAGE = `<!DOCTYPE html>
       saveShots(); populateShotFilters(); renderShotlist();
       alert(added+' new shot(s) imported, '+linked+' linked. Every shot now syncs to the computer 1:1.');
     }).catch(function(){ alert('Couldn’t reach the computer. Make sure the software is open and you’re on the same network.'); });
+  }
+
+  // ── AUTOMATIC live sync of the computer's shot list (replaces the old "Import PC"
+  // button). Runs on load, on a timer, and when the phone wakes. It pulls the PC's
+  // current list and MERGES it without ever un-marking what's already been shot:
+  //   • New PC shots are added (pending, or whatever the PC already shows).
+  //   • Matching shots refresh their descriptive fields (artist/stage/pilot/day/time/notes).
+  //   • A shot you completed/skipped HERE is never downgraded to pending by the PC.
+  //   • A PC completion/skip is adopted only when this phone still shows it pending
+  //     (so a mark from the desk or another phone propagates) — unless you have an
+  //     unsynced change of your own in flight for that shot.
+  //   • A shot REMOVED from the PC list is dropped only if it's still pending here
+  //     (a future shot that got cut); ones you already completed/skipped are KEPT as
+  //     history. Shot-list changes are for the future, not the past.
+  function nKey(a, s, d){ return ((a||'')+'|'+(s||'')+'|'+(d||'')).toUpperCase(); }
+  function hasQueuedFor(x){
+    var q=loadQ();
+    for(var i=0;i<q.length;i++){
+      if(x.pcId && q[i].pcId===x.pcId) return true;
+      var m=q[i].match;
+      if(m && (((m.assignment||'')+'|'+(m.daySection||'')).toUpperCase())===(((x.artist||'')+'|'+(x.day||'')).toUpperCase())) return true;
+    }
+    return false;
+  }
+  function slMergeFromPc(items){
+    var changed=false, seen={}, i, x;
+    var byPc={}; shotItems.forEach(function(s){ if(s.pcId) byPc[s.pcId]=s; });
+    items.forEach(function(it){
+      var id=it.id||''; if(!id) return;
+      var artist=it.assignment||'', stage=it.stage||'', day=it.daySection||'', pilot=it.pilot||'';
+      var key=nKey(artist,stage,day);
+      var ex=byPc[id]||null;
+      if(!ex){ // link drifted PC id (or first sight) to a same-named phone shot, 1:1
+        for(i=0;i<shotItems.length;i++){ x=shotItems[i]; if(seen[x.id]) continue; if(nKey(x.artist,x.stage,x.day)===key && (!x.pcId||x.pcId===id)){ ex=x; break; } }
+      }
+      if(ex){
+        seen[ex.id]=true;
+        if(ex.pcId!==id){ ex.pcId=id; changed=true; }
+        if(ex.src!=='pc'){ ex.src='pc'; changed=true; }
+        if(ex.artist!==artist){ ex.artist=artist; changed=true; }
+        if(ex.stage!==stage){ ex.stage=stage; changed=true; }
+        if((ex.pilot||'')!==pilot){ ex.pilot=pilot; changed=true; }
+        if((ex.day||'')!==day){ ex.day=day; changed=true; }
+        var ft=it.flyTime||''; if(ft && ex.time!==ft){ ex.time=ft; changed=true; }
+        var inflight=hasQueuedFor(ex);
+        var pn=it.notes||''; if(pn && ex.notes!==pn && !inflight){ ex.notes=pn; changed=true; }
+        var ps=it.status||'pending';
+        if((ex.status||'pending')==='pending' && (ps==='completed'||ps==='skipped') && !inflight){ ex.status=ps; changed=true; }
+        var pt=it.takes||''; if(pt && !ex.takes){ ex.takes=pt; changed=true; }
+      } else {
+        shotItems.push({ id:uid(), pcId:id, artist:artist, stage:stage, festival:'', pilot:pilot, day:day, time:it.flyTime||'', notes:it.notes||'', status:it.status||'pending', takes:it.takes||'', src:'pc' });
+        changed=true;
+      }
+    });
+    // Drop pending shots the PC removed; keep already-shot ones as history.
+    var kept=[];
+    for(i=0;i<shotItems.length;i++){
+      x=shotItems[i];
+      if(x.src==='pc' && !seen[x.id] && x.status!=='completed' && x.status!=='skipped'){ changed=true; continue; }
+      kept.push(x);
+    }
+    if(kept.length!==shotItems.length) shotItems=kept;
+    if(changed){
+      saveShots(); populateShotFilters();
+      // Refresh the view only when it's safe — never clobber an in-progress edit/add.
+      if(el('slPanel') && el('slPanel').style.display!=='none' && !slEditId && !slAddOpen && !slCsvOpen) renderShotlist();
+    }
+  }
+  function slAutoSync(){
+    fetch('/shotlist',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+      var items=(d&&d.items)||[];
+      if(!items.length) return; // PC has no list loaded — keep this phone's list as-is
+      slMergeFromPc(items);
+    }).catch(function(){ /* offline — keep the local list, retry next tick */ });
   }
 
   // CSV / paste importer — add shots from a different show right on the phone.
@@ -775,6 +849,11 @@ const PAGE = `<!DOCTYPE html>
   poll();
   setInterval(poll, 1500);
   connect();
+  // Auto-sync the computer's shot list: load local first, pull+merge now, then keep
+  // it live on a timer (no "Import PC" tap needed).
+  loadShots();
+  slAutoSync();
+  setInterval(slAutoSync, 4000);
   // Restore the last view so returning from the slate (or a reload) lands you back
   // on the screen you were on (e.g. the shot list), not always Home.
   (function(){
@@ -786,7 +865,7 @@ const PAGE = `<!DOCTYPE html>
     else showHome();
   })();
   // Re-poll / reconnect when the phone wakes or returns to the app.
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ poll(); if(!ws||ws.readyState!==1) connect(); } });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ poll(); slAutoSync(); if(!ws||ws.readyState!==1) connect(); } });
   // Register the offline service worker so Shot List & Slate open with the computer off.
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }
 </script>

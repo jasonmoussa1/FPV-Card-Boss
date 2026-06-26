@@ -6,6 +6,12 @@ export interface HelpEntry {
 }
 
 export const HELP_CONTENT: Record<string, HelpEntry> = {
+  platform: {
+    title: "Windows / Mac",
+    what: "FPV Card Boss runs on both Windows and Mac. On first launch it asks which computer this is; you can change it from the badge in the corner. The choice decides which engine drives GoPro Player and your drives.",
+    why: "The whole workflow, settings, and mobile companion are identical on both. Only behind-the-scenes details differ (file copy, the robot engine, and the GoPro export folder).",
+    tips: ["On a Mac, grant Accessibility + Screen Recording the first time you run the robot (System Settings ▸ Privacy & Security).", "Calibration is stored separately per computer, so the Mac and PC never overwrite each other."],
+  },
   loadSample: {
     title: "Load Sample EDC",
     what: "Loads the built-in EDC Las Vegas 2026 shot list so you can practice the entire workflow without a real SD card or CSV. It fills the shot list, sets the day to Day 1 – Fest Grounds, and picks a sample pilot.",
@@ -18,12 +24,12 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   },
   setup: {
     title: "Setup",
-    what: "Opens the one-time configuration for this show: the three drive locations, the SD card drive, your pilots, and GoPro robot calibration.",
+    what: "Opens the one-time configuration for this show: the three drive locations, the SD card drive/volume, your pilots, and GoPro robot calibration.",
     why: "Set this up once when you arrive on site. Every folder path and copy operation in the app depends on these being correct.",
   },
   eventName: {
     title: "Event Name",
-    what: "The name of the show, e.g. EDC2026. This becomes the top-level folder: Local\\[Event]\\[Day]\\[Pilot]\\[Card]_[Artist].",
+    what: "The name of the show, e.g. EDC2026. This becomes the top-level folder: Local\\[Event]\\[Pilot]\\[Day]\\[Artist].",
     why: "Keep it short and consistent — it's used to build every single folder path, so changing it mid-show splits your footage across two folder trees.",
   },
   localPath: {
@@ -42,14 +48,14 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     why: "The social team should never receive raw footage — only finished, stabilized clips — so raw is deliberately left out of this copy.",
   },
   sdCard: {
-    title: "SD Card Drive",
-    what: "The drive letter Windows assigns to the pilot's SD card when you plug it in (e.g. E:\\). Everything here is copied into the RAW folder.",
-    why: "This letter can change between cards. Double-check it for every card, or you risk copying from the wrong card.",
-    tips: ["Open File Explorer to confirm the exact drive letter before copying."],
+    title: "SD Card Drive / Volume",
+    what: "Where the pilot's SD card shows up when you plug it in — a drive letter on Windows (e.g. E:\\) or a /Volumes path on Mac (e.g. /Volumes/Untitled). Everything here is copied into the RAW folder.",
+    why: "This location can change between cards. Double-check it for every card, or you risk copying from the wrong card.",
+    tips: ["Confirm the exact drive/volume before copying (File Explorer on Windows, Finder on Mac)."],
   },
   goproOutput: {
     title: "GoPro Output Folder",
-    what: "Where GoPro Player drops finished exports — usually C:\\Users\\[you]\\Videos. After export, the MOVE FILES button pulls the new clips into the correct STABILIZED folder for you.",
+    what: "Where GoPro Player drops finished exports — the Videos folder on Windows, ~/Movies on Mac. After export, the MOVE FILES button pulls the new clips into the correct STABILIZED folder for you.",
     why: "The app deliberately doesn't fight GoPro's export dialog. It lets GoPro export to its default folder, then moves the files, which is far more reliable.",
   },
   pilots: {
@@ -59,9 +65,9 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   },
   calibrate: {
     title: "Calibrate GoPro Robot",
-    what: "Teaches the app exactly where GoPro Player's buttons and sliders sit on YOUR screen. Hover over each control and press SPACE.",
-    why: "GoPro Player can't be controlled normally by Windows, so the app physically moves the mouse and clicks. That only works if it knows the on-screen positions. If you move or resize the GoPro window, recalibrate — otherwise the robot clicks the wrong spot.",
-    tips: ["Recalibrate any time the GoPro window moves or changes size."],
+    what: "Teaches the app exactly where GoPro Player's buttons and sliders sit on YOUR screen. Hover over each of the 14 controls — including Horizon Lock — and press SPACE.",
+    why: "GoPro Player can't be controlled normally, so the app physically moves the mouse and clicks. That only works if it knows the on-screen positions. If you move or resize the GoPro window, recalibrate — otherwise the robot clicks the wrong spot.",
+    tips: ["Recalibrate any time the GoPro window moves or changes size, you change resolution, or you switch computers.", "Calibration is saved separately for Windows and Mac."],
   },
   daySection: {
     title: "Day / Section Filter",
@@ -114,12 +120,13 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   },
   copySdToRaw: {
     title: "Copy SD to RAW",
-    what: "Copies everything off the SD card into the local RAW folder using Robocopy (/E /Z /W:5 /R:3 — all subfolders, resumable, retries on errors). It also measures the card size in GB for your log.",
+    what: "Copies everything off the SD card into the local RAW folder — Robocopy on Windows (/E /Z /W:5 /R:3 — all subfolders, resumable, retries), rsync on Mac. It also measures the card size in GB for your log.",
     why: "Always preserve the untouched originals in RAW before doing anything else. If a later step fails, you can always re-export from RAW.",
+    tips: ["If RAW already has files, the new card copies into a fresh BATCH_02 subfolder so the robot only stabilizes the new clips."],
   },
   goproSettings: {
     title: "GoPro Export Settings",
-    what: "The locked-in ReelSteady V2 settings for every clip: Codec HEVC (H.265) 10-bit, HyperSmooth Pro ON, Smoothness 15, Cropping 15, Aspect Ratio 8:7.",
+    what: "The locked-in settings for every clip: Codec HEVC (H.265) 10-bit, HyperSmooth Pro ON, Smoothness 15, Cropping 15, Aspect Ratio 8:7.",
     why: "These exact values give consistent, smooth stabilization across all pilots and the widest field of view (8:7), so footage cuts together cleanly in the edit. The consistency is the whole point — every clip must match.",
   },
   unGain: {
@@ -127,15 +134,30 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     what: "Before adjusting Smoothness and Cropping, the robot clicks the un-gain / chain-link button to UNLINK the two sliders.",
     why: "When linked, moving one slider drags the other with it, so you could never set Smoothness 15 and Cropping 15 independently. Unlinking first is what lets each be set correctly.",
   },
+  horizonLock: {
+    title: "Horizon Lock",
+    what: "Toggle ON (turns blue 🌐) before running a batch and the robot enables Horizon Lock in the exporter so footage exports level.",
+    why: "Some sets want a locked, level horizon. If the toggle is on but Horizon Lock wasn't captured during calibration, the app warns and skips it — recalibrate to enable.",
+  },
+  dualMode: {
+    title: "Dual Mode (Regular + Horizon Lock)",
+    what: "Exports every clip TWICE: a normal pass into STABILIZED, then a second pass with Horizon Lock into a STABILIZED\\HORIZON LOCK subfolder.",
+    why: "Delivers both the regular and the level-horizon version so editors can choose later, with no filename collisions. It takes about twice as long and needs the Horizon Lock calibration point.",
+  },
+  autoMode: {
+    title: "Auto / Manual Move Mode",
+    what: "Manual (default) = you click Move, each delivery, and Complete yourself. Auto = when the export finishes it auto-moves → Media → Bella → completes the card and advances.",
+    why: "Auto is hands-free for a steady night; it stops and alerts you if any step fails and never completes a card that didn't fully deliver. Dumping raws always stays a manual click unless Auto-Dump is enabled.",
+  },
   goproRobot: {
     title: "Start GoPro Robot",
     what: "Runs the full automation: opens GoPro Player, drops in the RAW clips, selects ALL of them, applies the SOP settings, and starts the batch export.",
-    why: "It presses Ctrl+A to select every clip before applying settings — this is critical, because if all clips aren't selected the settings only hit one file. Keep your hands off the mouse while it runs.",
-    tips: ["Don't touch the mouse or keyboard until the robot finishes."],
+    why: "It selects every clip (Ctrl+A on Windows, Cmd+A on Mac) before applying settings — critical, because if all clips aren't selected the settings only hit one file. Keep your hands off the mouse while it runs.",
+    tips: ["Don't touch the mouse or keyboard until the robot finishes.", "On a Mac, grant Accessibility + Screen Recording first."],
   },
   moveExports: {
     title: "Move Files",
-    what: "After GoPro finishes exporting, this moves the freshly exported .mp4s from GoPro's Videos folder into this card's STABILIZED folder.",
+    what: "After GoPro finishes exporting, this moves the freshly exported .mp4s from GoPro's output folder (Videos on Windows, ~/Movies on Mac) into this card's STABILIZED folder.",
     why: "It only grabs files created after the export started, so it won't touch older clips. Run it once the export is fully complete.",
   },
   copyToMedia: {
@@ -145,8 +167,23 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   },
   copyToBella: {
     title: "Copy to Bella",
-    what: "Copies ONLY the stabilized clips to the Bella social drive under the artist's name (top-level files only, no subfolders).",
+    what: "Copies ONLY the stabilized clips to the Bella social drive under the artist's name (including the HORIZON LOCK subfolder if Dual Mode was used).",
     why: "The social team should never get raw footage — only finished, stabilized clips.",
+  },
+  dumpRaws: {
+    title: "Dump Raws",
+    what: "Copies every RAW clip under the active pilot's local tree into one flat Raw Dump folder, skipping anything already dumped (resume-safe through the night).",
+    why: "A single consolidated backup of all originals per pilot. It's always a deliberate manual click (or Auto-Dump if enabled) and must be done before you wipe an SD card.",
+  },
+  deleteSd: {
+    title: "Delete SD Card",
+    what: "Wipes the GoPro footage off the SD card (keeps the folder structure). Only the known media types are removed.",
+    why: "Frees the card for the pilot to fly again. Heavily guarded — it refuses the system drive and any of your working/media/Bella locations, and only appears after raws are backed up.",
+  },
+  siteMap: {
+    title: "Site Map (Venue Map)",
+    what: "Add a venue map image (PNG/JPG/WEBP/GIF/BMP/SVG) in Setup ▸ Mobile Dashboard. It's served full-screen to the phone and cached for offline viewing.",
+    why: "Lets everyone on the team pull up the festival map on their phone. Replace it on the computer and every connected phone updates instantly.",
   },
   checklistRawLocal: {
     title: "Verify: RAW Copied Locally",

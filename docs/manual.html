@@ -121,298 +121,356 @@
 <section class="page cover">
   <div class="logo">🎬</div>
   <h1>FPV<br/>CARD&nbsp;BOSS</h1>
-  <div class="tag">The festival FPV stabilizing, delivery &amp; slate command center — with a live mobile companion for the field.</div>
+  <div class="tag">The festival FPV stabilizing, delivery &amp; slate command center — now on Windows <em>and</em> Mac, with a live mobile companion for the field.</div>
   <div class="chips">
     <span class="chip">Version 1.2.0</span>
-    <span class="chip c">Windows 10 / 11 · 64-bit</span>
+    <span class="chip c">Windows 10 / 11 &amp; macOS</span>
     <span class="chip p">Mobile companion · iPhone &amp; Android</span>
   </div>
   <div class="rule"></div>
-  <div class="meta">User Manual &amp; Setup Guide &nbsp;·&nbsp; Mobile page build pwa-2026-06-02-x-offline-first</div>
+  <div class="meta">User Manual, Setup Guide &amp; Operator SOP</div>
 </section>
 
 <!-- ░░░ WELCOME + CONTENTS ░░░ -->
 <section class="page">
   <div class="corner">Welcome</div>
   <h2 class="sec"><span class="num">0</span> Welcome</h2>
-  <p class="sublede">What FPV Card Boss does and how this manual is organized.</p>
-  <p class="lead">FPV Card Boss automates the tedious parts of festival FPV: it drives the GoPro Player batch
-  exporter to stabilize your footage, then copies the results to your local, media, and Bella drives, dumps the
-  raws, and advances your card queue — optionally <strong>hands-free</strong>. A built-in <strong>mobile companion</strong>
-  lets a pilot or spotter run the shot list and digital slate from a phone, and mark shots done so the editor at the
-  computer knows footage is on the way.</p>
+  <p class="sublede">What this is, who it's for, and how to read it.</p>
+  <p class="lead">FPV Card Boss automates the punishing parts of festival FPV: it drives the GoPro Player batch
+  exporter to stabilize your footage with identical settings every time, then copies the results to your local,
+  media, and Bella drives, dumps the raws, and advances your card queue — optionally <strong>hands-free</strong>. A
+  built-in <strong>mobile companion</strong> lets a pilot or spotter run the shot list and digital slate from a phone
+  and mark shots done so the editor at the computer knows footage is on the way.</p>
 
-  <div class="call note"><div class="ttl">Self-contained</div><p>The whole system — the desktop app, the stabilizer
-  robot, the mobile companion web server, and the festival slate — lives inside a single <code class="k">.exe</code>.
-  No installation, no dependencies to chase.</p></div>
+  <div class="call note"><div class="ttl">Two ways to read this</div><p><strong>New to the job?</strong> Read
+  straight through — Section 1 explains the work itself before the buttons. <strong>Done it before and just need a
+  refresher?</strong> Jump to the <strong>Quick Reference</strong> on the second-to-last page.</p></div>
+
+  <div class="call tip"><div class="ttl">Now cross-platform</div><p>Everything in this manual works the same on a
+  Windows PC and a Mac. Where something differs under the hood, it's called out. The app asks which computer it's on
+  the first time you launch it.</p></div>
 
   <h3><span class="dot"></span>Contents</h3>
   <div class="toc">
-    <div class="row"><span class="n">1</span><div><div class="t">System Requirements</div><div class="d">What you need on the computer and phone.</div></div></div>
-    <div class="row"><span class="n">2</span><div><div class="t">Install &amp; First Launch</div><div class="d">Running the app on any Windows PC.</div></div></div>
-    <div class="row"><span class="n">3</span><div><div class="t">First-Time Setup</div><div class="d">Paths, calibration, Horizon Lock &amp; password.</div></div></div>
-    <div class="row"><span class="n">4</span><div><div class="t">The Core Workflow</div><div class="d">Create → Copy SD → Stabilize → Move → Deliver → Complete.</div></div></div>
-    <div class="row"><span class="n">5</span><div><div class="t">Auto Mode &amp; Horizon Lock</div><div class="d">Hands-free delivery and the level-horizon toggle.</div></div></div>
-    <div class="row"><span class="n">6</span><div><div class="t">The Mobile Companion</div><div class="d">Connecting by Wi-Fi or Tailscale; the three sections.</div></div></div>
-    <div class="row"><span class="n">7</span><div><div class="t">Shot List on the Phone</div><div class="d">Build it, import it, mark it — and sync to the computer.</div></div></div>
-    <div class="row"><span class="n">8</span><div><div class="t">The Festival Slate</div><div class="d">GoPro sync QR, takes, themes &amp; fullscreen.</div></div></div>
-    <div class="row"><span class="n">9</span><div><div class="t">Tips &amp; Troubleshooting</div><div class="d">Per-machine settings, HTTPS limits &amp; fixes.</div></div></div>
+    <div class="row"><span class="n">1</span><div><div class="t">The Job &amp; The SOP</div><div class="d">What you're actually doing, and why.</div></div></div>
+    <div class="row"><span class="n">2</span><div><div class="t">Requirements, Install &amp; Platform</div><div class="d">What you need; choosing Windows or Mac.</div></div></div>
+    <div class="row"><span class="n">3</span><div><div class="t">First-Time Setup</div><div class="d">Paths, pilots, calibration &amp; phone password.</div></div></div>
+    <div class="row"><span class="n">4</span><div><div class="t">The Core Workflow</div><div class="d">Create → Copy → Stabilize → Move → Deliver → Complete.</div></div></div>
+    <div class="row"><span class="n">5</span><div><div class="t">Stabilization &amp; Calibration</div><div class="d">The locked settings and the 14 points.</div></div></div>
+    <div class="row"><span class="n">6</span><div><div class="t">Auto · Horizon Lock · Dual Mode</div><div class="d">Hands-free delivery; level horizon; both versions.</div></div></div>
+    <div class="row"><span class="n">7</span><div><div class="t">The Mobile Companion</div><div class="d">Connecting; the four sections; deliveries.</div></div></div>
+    <div class="row"><span class="n">8</span><div><div class="t">Shot List, Slate &amp; Site Map</div><div class="d">Build, mark, sync; slate &amp; venue map.</div></div></div>
+    <div class="row"><span class="n">9</span><div><div class="t">Simple Mode &amp; Troubleshooting</div><div class="d">The lighter flow and common fixes.</div></div></div>
+    <div class="row"><span class="n">★</span><div><div class="t">Quick Reference</div><div class="d">The whole job on one page.</div></div></div>
   </div>
 
   <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Welcome</span></div>
 </section>
 
-<!-- ░░░ 1. REQUIREMENTS ░░░ -->
+<!-- ░░░ 1. THE JOB & SOP ░░░ -->
 <section class="page">
-  <div class="corner">Requirements</div>
-  <h2 class="sec"><span class="num">1</span> System Requirements</h2>
-  <p class="sublede">A short checklist before you start.</p>
+  <div class="corner">The Job</div>
+  <h2 class="sec"><span class="num">1</span> The Job &amp; The SOP</h2>
+  <p class="sublede">Read this first if you've never wrangled cards at a festival.</p>
+  <p class="lead">You are the <strong>stabilizer operator</strong> for an FPV drone team at a music festival. Pilots fly
+  all night and hand you SD cards — often at 3&nbsp;AM, out of order, several at once. Your job: get every card's
+  footage <strong>copied, stabilized, and delivered</strong> to the right places before the editors need it, and
+  logged so nothing is lost.</p>
 
+  <h3><span class="dot"></span>The one rule that never breaks</h3>
+  <p>Never destroy the originals. Footage always lives in two halves: <strong>RAW</strong> — the untouched clips
+  straight off the card — and <strong>STABILIZED</strong> — the smoothed exports. They live in separate subfolders for
+  every shot, so originals are never overwritten and you can always re-export from RAW if anything goes wrong.</p>
+
+  <h3><span class="dot"></span>Why stabilize, and why a robot</h3>
+  <p>FPV drones are tiny and twitchy; raw footage is unusably shaky. GoPro Player's HyperSmooth&nbsp;Pro (ReelSteady)
+  flattens that motion. Every clip from every pilot must use the <em>same</em> settings so footage cuts together
+  cleanly in the edit — that consistency is the whole reason this app exists. The app physically drives GoPro Player
+  (a "robot") so the settings are identical every time and you're not hand-clicking sliders half-asleep.</p>
+
+  <div class="call note"><div class="ttl">Where footage goes</div><p><strong>Local</strong> — your fast working
+  drive. <strong>Media Drive</strong> — the master archive (RAW + STABILIZED together, named by card ID).
+  <strong>Bella / Social</strong> — stabilized clips only, named by artist (the social team must never get raws).
+  Then the card is logged in the shared <strong>Media Master</strong> sheet.</p></div>
+
+  <div class="call tip"><div class="ttl">The whole loop in one breath</div><p>Card in hand → make folders → copy
+  card to RAW → robot stabilizes → move exports to STABILIZED → copy to Media + Bella → log it → wipe the card →
+  next.</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 1 — The Job</span></div>
+</section>
+
+<!-- ░░░ 2. REQUIREMENTS / INSTALL / PLATFORM ░░░ -->
+<section class="page">
+  <div class="corner">Setup</div>
+  <h2 class="sec"><span class="num">2</span> Requirements, Install &amp; Platform</h2>
+  <p class="sublede">What you need, and telling the app which computer it's on.</p>
+
+  <h3><span class="dot"></span>You'll need</h3>
   <table class="req">
-    <tr><th>Item</th><th>Requirement</th></tr>
-    <tr><td>Computer</td><td>Windows 10 or 11, 64-bit. ~250&nbsp;MB free while running.</td></tr>
-    <tr><td>GoPro stabilizing</td><td><strong>GoPro Player</strong> (with the Batch Exporter) installed on that computer.</td></tr>
-    <tr><td>Drives</td><td>Your local working drive plus any Media / Bella delivery drives you use.</td></tr>
-    <tr><td>Phone</td><td>Any modern iPhone (Safari) or Android (Chrome). Nothing to install — it runs in the browser.</td></tr>
-    <tr><td>Off-Wi-Fi phone use</td><td><strong>Tailscale</strong> app on the PC and phone (optional — only for cellular / different networks).</td></tr>
+    <tr><td>Computer</td><td>A Windows 10/11 PC <strong>or</strong> a Mac (Apple Silicon or Intel, macOS 10.14+). A GPU that decodes HEVC.</td></tr>
+    <tr><td>GoPro Player</td><td>GoPro Player + HyperSmooth&nbsp;Pro (ReelSteady) installed, with the $99 HyperSmooth Pro unlock.</td></tr>
+    <tr><td>Drives</td><td>A fast local drive, plus the Media and Bella/Social drives (or network volumes).</td></tr>
+    <tr><td>Phone</td><td>iPhone or Android for the mobile companion (optional but recommended). Tailscale app for field use.</td></tr>
   </table>
 
-  <div class="call tip"><div class="ttl">Good to know</div><p>The phone and computer talk over your local network. On the
-  same Wi-Fi nothing extra is needed. To reach the computer from cellular or a different network, Tailscale creates a
-  secure private link (see Section 6).</p></div>
+  <h3><span class="dot"></span>Choosing your platform</h3>
+  <p>The first time you launch, the app asks <strong>"Which computer is this — Windows PC or Mac?"</strong> and
+  pre-selects what it detects. Your choice decides which engine drives GoPro Player and your drives. You can change it
+  any time from the small platform badge in the corner.</p>
 
-  <h3><span class="dot"></span>What lives where</h3>
-  <ul class="ticks">
-    <li>The <strong>app and all its tools</strong> live inside the <code class="k">.exe</code>.</li>
-    <li>Your <strong>settings, calibration, and phone password</strong> are saved on the computer that runs the app — so each computer keeps its own.</li>
-    <li>Your <strong>phone's shot list</strong> is saved on the phone, so it works even with the computer off.</li>
-  </ul>
+  <div class="call warn"><div class="ttl">Mac: two one-time permissions</div><p>On a Mac, the first time the robot
+  runs, macOS asks for <strong>Accessibility</strong> (to move the mouse/keyboard) and <strong>Screen Recording</strong>
+  (so calibration can read the screen). Approve both in <em>System Settings ▸ Privacy &amp; Security</em>. This is the
+  Mac equivalent of the Windows firewall prompt — one time per machine.</p></div>
 
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>1 · Requirements</span></div>
+  <div class="call note"><div class="ttl">What differs between Windows &amp; Mac</div><p>Nothing you can see: same
+  workflow, buttons, settings, slate, and companion. Behind the scenes, file copying uses Robocopy on Windows and
+  <code class="k">rsync</code> on Mac, the robot uses a different click engine, and GoPro exports land in
+  <code class="k">Videos</code> on Windows vs <code class="k">~/Movies</code> on Mac. Calibration is saved separately
+  per computer.</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 2 — Requirements</span></div>
 </section>
 
-<!-- ░░░ 2. INSTALL ░░░ -->
-<section class="page">
-  <div class="corner">Install</div>
-  <h2 class="sec"><span class="num">2</span> Install &amp; First Launch</h2>
-  <p class="sublede">There is no installer — you just run the file.</p>
-
-  <ol class="steps">
-    <li><span class="st">Copy the app to the computer.</span> Put <span class="mono">FPV Card Boss 1.2.0.exe</span> anywhere — Desktop, a folder, or a USB stick.</li>
-    <li><span class="st">Double-click it.</span> It launches directly; the first start takes a few extra seconds as it unpacks.</li>
-    <li><span class="st">Clear the SmartScreen warning (first time only).</span> Windows may show a blue <em>"Windows protected your PC"</em> box. Click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
-  </ol>
-
-  <div class="call note"><div class="ttl">Why the warning?</div><p>SmartScreen flags any app it hasn't seen widely
-  downloaded yet. This is expected for software you distribute yourself and is safe to run.</p></div>
-
-  <div class="call warn"><div class="ttl">Antivirus / firewall</div><p>If Windows Firewall asks to allow network access,
-  choose <strong>Allow</strong> — the app needs it to serve the mobile companion to your phone on the local network.</p></div>
-
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>2 · Install</span></div>
-</section>
-
-<!-- ░░░ 3. SETUP ░░░ -->
+<!-- ░░░ 3. FIRST-TIME SETUP ░░░ -->
 <section class="page">
   <div class="corner">Setup</div>
   <h2 class="sec"><span class="num">3</span> First-Time Setup</h2>
-  <p class="sublede">Do this once on each computer. Open <strong>Setup</strong> in the app.</p>
+  <p class="sublede">Do this once on each computer. Open Setup.</p>
+  <ol class="steps">
+    <li><span class="st">Set the folder paths.</span> Point each at this computer's locations: Local root, Media drive,
+      Bella drive, Raw Dump folder, SD Card drive/volume, and the GoPro output folder.</li>
+    <li><span class="st">Add your pilots.</span> Each pilot gets a card prefix and starting number — e.g.
+      <code class="k">L</code> from 1 produces <code class="k">L_001</code>, <code class="k">L_002</code>… The active
+      pilot sets the next card ID and filters the shot list.</li>
+    <li><span class="st">Calibrate the GoPro robot.</span> Run <code class="k">🎯 Calibrate GoPro Robot</code> and follow
+      the 14 steps — hover each control in GoPro Player and press <code class="k">SPACE</code> (Section 5).</li>
+    <li><span class="st">Set the phone "Move Files" password</span> (optional). It gates only the Move Files section on
+      the phone; the Shot List &amp; Slate stay open. Leave blank for none.</li>
+  </ol>
 
-  <h3><span class="dot"></span>Step A — Set your folder paths</h3>
-  <p>In Setup, point each path at this computer's folders:</p>
-  <ul class="ticks">
-    <li><strong>Local root</strong> — where stabilized footage is organized.</li>
-    <li><strong>Media drive</strong> and <strong>Bella drive</strong> — your delivery destinations.</li>
-    <li><strong>Raw Dump folder</strong> — where raw files are consolidated.</li>
-    <li><strong>SD Card drive</strong>, <strong>GoPro output folder</strong>, and the <strong>GoPro App path</strong>.</li>
-  </ul>
-  <div class="call note"><div class="ttl">Defaults are placeholders</div><p>The default paths point at the original
-  computer's folders. Change them to match the machine you're on.</p></div>
+  <div class="call danger"><div class="ttl">Calibration is per-computer &amp; per-resolution</div><p>It's saved for
+  this machine at its exact screen resolution. Re-calibrate on a new computer, if you change display
+  scaling/resolution, or if you move/resize the GoPro window — otherwise the robot clicks the wrong spots. Windows and
+  Mac calibrations are stored independently.</p></div>
 
-  <h3><span class="dot"></span>Step B — Calibrate the GoPro Robot</h3>
-  <p>Run <strong>🎯 Calibrate GoPro Robot</strong> and follow the 14 on-screen steps — hover each control in GoPro Player
-  and press <strong>SPACE</strong> to capture its position (including the new <strong>Horizon Lock</strong> point).</p>
-  <div class="call danger"><div class="ttl">Calibration is per-computer</div><p>It is saved for this computer and its
-  exact screen resolution. You <strong>must re-calibrate</strong> on every new machine or if you change display scaling/resolution.</p></div>
-
-  <h3><span class="dot"></span>Step C — Set the phone "Move Files" password</h3>
-  <p>In Setup, type a simple password in <strong>Phone "Move Files" Password</strong> (shown in plain text so you can read it).
-  This gates only the Move Files section on the phone — the Shot List &amp; Slate stay open to anyone. Leave it blank for no password.</p>
-
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>3 · Setup</span></div>
+  <h3><span class="dot"></span>Folder structure the app builds</h3>
+  <div class="codeblock">Local:   [Local]\[Event]\[Pilot]\Day[N]\[Artist]\RAW  +  \STABILIZED
+Media:   [Media]\[CardID]\        (RAW + STABILIZED together)
+Bella:   [Bella]\[Artist]\        (STABILIZED clips only)
+Dual:    ...\STABILIZED\HORIZON LOCK\   (2nd pass, if Dual Mode)</div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 3 — Setup</span></div>
 </section>
 
-<!-- ░░░ 4. WORKFLOW ░░░ -->
+<!-- ░░░ 4. CORE WORKFLOW ░░░ -->
 <section class="page">
   <div class="corner">Workflow</div>
   <h2 class="sec"><span class="num">4</span> The Core Workflow</h2>
-  <p class="sublede">Festival mode, from card in hand to delivered &amp; logged.</p>
-
+  <p class="sublede">Festival mode — from card in hand to delivered &amp; logged.</p>
   <ol class="steps">
-    <li><span class="st">① Create Directory Paths.</span> Select the pilot/card, then click the big green button to create this card's folders.</li>
-    <li><span class="st">② Copy SD Card → Local RAW.</span> The amber button right beneath it copies the SD card into the local RAW folder and verifies the file count.</li>
-    <li><span class="st">Set export options.</span> Toggle <strong>Horizon Lock</strong> on if this batch needs it (Section 5).</li>
-    <li><span class="st">🤖 Auto-Run GoPro Batch.</span> The robot drives GoPro Player to stabilize. <strong>Do not touch the mouse or keyboard while it runs.</strong></li>
-    <li><span class="st">Move files to STABILIZED.</span> When the export finishes, move the exported clips into the card's STABILIZED folder.</li>
-    <li><span class="st">Deliver.</span> Copy to Media Drive, Copy to Bella Drive, and Dump Raws as needed.</li>
-    <li><span class="st">Complete Card &amp; Shift.</span> Logs the card to history and advances to the next one.</li>
+    <li><span class="st">Pick the card's assignment.</span> Confirm the active pilot and day, then pick the artist/shot
+      (use <strong>Choose From List</strong> when cards arrive out of order). This sets the card ID and folder names.</li>
+    <li><span class="st">Create Directory Paths.</span> The big green button makes this card's RAW &amp; STABILIZED
+      folders locally, on the Media Drive, and the artist folder on Bella.</li>
+    <li><span class="st">Copy SD Card → Local RAW.</span> Copies the card in and verifies file count and size. If RAW
+      already has files, it copies into a fresh <code class="k">BATCH_02</code> subfolder so the robot only stabilizes
+      the new clips.</li>
+    <li><span class="st">Set export options.</span> Toggle Horizon Lock or Dual Mode if this batch needs them (Section 6).</li>
+    <li><span class="st">🤖 Auto-Run GoPro Batch.</span> The robot drives GoPro Player. <strong>Hands off the mouse and
+      keyboard until it finishes.</strong></li>
+    <li><span class="st">Move Files → STABILIZED.</span> When the export finishes, move the new clips into the card's
+      STABILIZED folder (only files created after the robot started are taken).</li>
+    <li><span class="st">Deliver.</span> Copy to Media Drive, Copy to Bella, and Dump Raws as needed.</li>
+    <li><span class="st">Complete Card.</span> Logs the card, advances the number, clears for the next. Then update the
+      Media Master sheet.</li>
   </ol>
-
-  <div class="call tip"><div class="ttl">Do it from the couch</div><p>Every one of these delivery steps can also be
-  triggered from your phone's <strong>Move Files</strong> section (see Section 6).</p></div>
-
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>4 · Workflow</span></div>
+  <div class="call tip"><div class="ttl">From the couch</div><p>Every step from "Move Files" on can be triggered from
+  your phone, or run hands-free with Auto mode (Section 6).</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 4 — Workflow</span></div>
 </section>
 
-<!-- ░░░ 5. AUTO + HORIZON ░░░ -->
+<!-- ░░░ 5. STABILIZATION & CALIBRATION ░░░ -->
 <section class="page">
-  <div class="corner">Automation</div>
-  <h2 class="sec"><span class="num">5</span> Auto Mode &amp; Horizon Lock</h2>
-  <p class="sublede">Hands-free delivery, and the level-horizon export toggle.</p>
+  <div class="corner">Stabilize</div>
+  <h2 class="sec"><span class="num">5</span> Stabilization &amp; Calibration</h2>
+  <p class="sublede">The locked-in look, and teaching the robot your screen.</p>
 
-  <h3><span class="dot"></span>Auto Mode (on the computer)</h3>
-  <p>Use the big <strong>AUTO / MANUAL</strong> button above "Auto-Run GoPro Batch".</p>
+  <h3><span class="dot"></span>The SOP export settings — every clip, every pilot</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Codec</td><td class="mono">HEVC (H.265) 10-bit</td></tr>
+    <tr><td>HyperSmooth Pro</td><td class="mono">ON</td></tr>
+    <tr><td>Smoothness</td><td class="mono">15</td></tr>
+    <tr><td>Cropping</td><td class="mono">15</td></tr>
+    <tr><td>Aspect Ratio</td><td class="mono">8:7  (widest field of view)</td></tr>
+  </table>
+  <div class="call note"><div class="ttl">Why "un-gain" matters</div><p>Smoothness and Cropping are linked by default —
+  moving one drags the other. The robot first clicks the <strong>un-gain / chain-link</strong> button to unlink them,
+  so it can set each to 15 independently. That's why it's a calibration point.</p></div>
+
+  <h3><span class="dot"></span>Calibration — 14 points</h3>
+  <p>GoPro Player can't be driven normally, so the app moves the mouse to fixed positions. Hover each control and press
+  <code class="k">SPACE</code> in this order:</p>
   <ul class="ticks">
-    <li><strong>Manual</strong> — you click Move, each delivery, and Complete yourself (the default, deliberate flow).</li>
-    <li><strong>Auto</strong> — the moment an export finishes it automatically moves files → Media → Bella → completes the card and advances. If any step fails it <strong>stops and alerts you</strong>, and never completes a card that didn't fully deliver.</li>
+    <li>batch list · 10-bit · HyperSmooth · un-gain · Horizon Lock</li>
+    <li>Smoothness start &amp; end · Cropping start &amp; end</li>
+    <li>aspect-ratio open · 8:7 option · drop zone · Start · Remove</li>
   </ul>
-  <div class="call note"><div class="ttl">Raws are always manual</div><p>Dumping raws is never part of Auto mode (or the
-  phone's Send to All) — it is always a deliberate click on the <strong>Dump Raws</strong> button.</p></div>
-  <div class="call note"><div class="ttl">Auto is great for walking away</div><p>Turn it on when you trust the setup and
-  need to step away. A live status line shows each step as it runs.</p></div>
+  <div class="call danger"><div class="ttl">Re-calibrate when the window moves</div><p>The robot clicks fixed screen
+  positions. Move/resize the GoPro window, change resolution, or switch computers → re-calibrate or it misses.</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 5 — Stabilization</span></div>
+</section>
+
+<!-- ░░░ 6. AUTO / HORIZON / DUAL ░░░ -->
+<section class="page">
+  <div class="corner">Modes</div>
+  <h2 class="sec"><span class="num">6</span> Auto · Horizon Lock · Dual Mode</h2>
+  <p class="sublede">Hands-free delivery, a level horizon, and both versions at once.</p>
+
+  <h3><span class="dot"></span>Auto vs Manual</h3>
+  <ul class="ticks">
+    <li><strong>Manual</strong> (default) — you click Move, each delivery, and Complete yourself.</li>
+    <li><strong>Auto</strong> — when an export finishes it auto-moves → Media → Bella → completes the card and advances.
+      If any step fails it stops and alerts you, and never completes a card that didn't fully deliver.</li>
+  </ul>
+  <div class="call note"><div class="ttl">Raws are always manual</div><p>Dumping raws is never part of Auto mode or the
+  phone's "Send to All" — it's a deliberate click, unless you enable Auto-Dump in Setup. Always dump raws before wiping
+  a card.</p></div>
 
   <h3><span class="dot"></span>Horizon Lock</h3>
-  <p>Toggle <strong>Horizon Lock</strong> ON (it turns blue 🌐) before running a batch. The robot will enable Horizon Lock in
-  the GoPro batch exporter so your footage exports level. Turn it OFF for a normal export.</p>
-  <div class="call warn"><div class="ttl">Needs its calibration point</div><p>If you turn it on but haven't captured the
-  Horizon Lock position during calibration, the app warns you and simply skips the click — re-calibrate to enable it.</p></div>
+  <p>Toggle it ON (turns blue 🌐) before running a batch and the robot enables Horizon Lock in the exporter so footage
+  exports level. If it's on but not calibrated, the app warns and skips it — re-calibrate to enable.</p>
 
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>5 · Automation</span></div>
+  <h3><span class="dot"></span>Dual Mode — both versions in one run</h3>
+  <p>Turn on Dual Mode and the robot exports every clip <strong>twice</strong>: a normal pass into
+  <code class="k">STABILIZED</code>, then a second pass with Horizon Lock into a
+  <code class="k">STABILIZED\HORIZON LOCK</code> subfolder. Editors get the regular and the level-horizon version with
+  no filename collisions. It takes about twice as long and needs the Horizon Lock calibration point.</p>
+  <div class="call tip"><div class="ttl">When to use Dual</div><p>Use it when the team hasn't decided between locked or
+  unlocked horizon for a set — deliver both and let them choose in the edit.</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 6 — Modes</span></div>
 </section>
 
-<!-- ░░░ 6. MOBILE ░░░ -->
+<!-- ░░░ 7. MOBILE COMPANION ░░░ -->
 <section class="page">
   <div class="corner">Mobile</div>
-  <h2 class="sec"><span class="num">6</span> The Mobile Companion</h2>
+  <h2 class="sec"><span class="num">7</span> The Mobile Companion</h2>
   <p class="sublede">Run the shot list, slate, and deliveries from your phone.</p>
 
-  <h3><span class="dot"></span>Connecting — scan a QR code</h3>
-  <ol class="steps">
-    <li><span class="st">Open the panel.</span> In the computer's Setup, find <strong>"Open on your phone"</strong> — each address shows a <strong>QR code</strong> and a <strong>Copy</strong> button (tap the <strong>?</strong> beside it for an in-app reminder).</li>
-    <li><span class="st">Scan with the phone camera</span> (or Copy the link and paste it into the phone browser).</li>
-    <li><span class="st">Add to Home Screen.</span> In the browser's Share menu choose <strong>Add to Home Screen</strong> for an app icon, full screen, and saved data.</li>
-  </ol>
+  <h3><span class="dot"></span>Connecting — three addresses</h3>
+  <p>In Setup, under "Open on your phone", scan a QR code or tap Copy. Then use <strong>Add to Home Screen</strong> for
+  a full-screen app.</p>
+  <ul class="ticks">
+    <li><strong>★ Tailscale (HTTPS)</strong> — <code class="k">https://…ts.net</code>. The best one: works anywhere with
+      Tailscale on, opens Shot List &amp; Slate even with the computer OFF, and enables the slate mic.</li>
+    <li><strong>Tailscale (HTTP)</strong> — works anywhere with Tailscale on, but online-only.</li>
+    <li><strong>Same Wi-Fi (LAN, 192.168…)</strong> — quick access on the same Wi-Fi. Online-only.</li>
+  </ul>
+  <div class="call note"><div class="ttl">Why HTTPS is special</div><p>Browsers only allow offline caching and microphone
+  access over a secure (HTTPS) address — the Tailscale HTTPS link. Open it once while the computer is running (Tailscale
+  on) so the phone saves a copy; after that it works offline.</p></div>
 
-  <h3><span class="dot"></span>Which address? (they're different on purpose)</h3>
-  <table>
-    <tr><th>Address</th><th>Use it for</th></tr>
-    <tr><td><strong>★ Tailscale HTTPS</strong><br><span class="mono">https://…ts.net</span></td><td><strong>The recommended one.</strong> Works anywhere with Tailscale on. The only address that opens <strong>offline</strong> (computer off) and enables the <strong>slate microphone</strong>. Add this to the Home Screen.</td></tr>
-    <tr><td>Tailscale HTTP<br><span class="mono">100.x.x.x</span></td><td>Works anywhere with Tailscale on, but <em>online-only</em> — no offline, no mic.</td></tr>
-    <tr><td>Same Wi-Fi (LAN)<br><span class="mono">192.168.x.x</span></td><td>Quick access on the same Wi-Fi as the computer. Online-only.</td></tr>
-  </table>
-  <div class="call note"><div class="ttl">Why HTTPS?</div><p>Browsers only allow a web app to work <strong>offline</strong> or use the
-  <strong>microphone</strong> over a secure (<span class="mono">https://</span>) address — that's the Tailscale HTTPS one. Open it once while
-  the computer is running so the phone saves a copy; after that it opens with the computer off.</p></div>
-
-  <h3><span class="dot"></span>The three sections</h3>
+  <h3><span class="dot"></span>The four sections</h3>
   <div class="cards">
-    <div class="mcard shots"><div class="ic">📋</div><h4>Shot List &amp; Slate</h4><p>Open to anyone. Build/track shots and launch the slate. Works offline.</p></div>
-    <div class="mcard slate"><div class="ic">🎬</div><h4>Simple Slate</h4><p>The festival slate on its own — type in artist/stage and go.</p></div>
-    <div class="mcard move"><div class="ic">🔒</div><h4>Move Files</h4><p>Live status &amp; delivery. Asks for the password you set in Setup.</p></div>
+    <div class="mcard shots"><div class="ic">📋</div><h4>Shot List &amp; Slate</h4><p>Open to anyone; works offline.</p></div>
+    <div class="mcard slate"><div class="ic">🎬</div><h4>Simple Slate</h4><p>The slate on its own.</p></div>
+    <div class="mcard move"><div class="ic">🔒</div><h4>Move Files</h4><p>Live status &amp; delivery; needs the password.</p></div>
   </div>
-  <div class="call note"><div class="ttl">Delivery mode (Move Files)</div><p>Starts on <strong>Manual</strong> — tap each
-  delivery yourself. <strong>⚡ Auto · Send to All</strong> is one tap that <em>moves the files and copies to every set-up drive
-  (Media + Bella) at once</em> — you still dump raws and complete the card yourself. After raws are backed up, a
-  <strong>🗑 Delete SD Card</strong> button appears so you can finish the entire process from the phone.</p></div>
-
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>6 · Mobile</span></div>
+  <div class="call tip"><div class="ttl">Delivery from the phone</div><p><strong>⚡ Auto · Send to All</strong> is one tap
+  that moves the files and copies to every set-up drive (Media + Bella). After raws are backed up, a <strong>🗑 Delete
+  SD Card</strong> button appears so you can finish a card entirely from your phone. (A <strong>🗺️ Site Map</strong> of
+  the venue is also available — see Section 8.)</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 7 — Mobile</span></div>
 </section>
 
-<!-- ░░░ 7. SHOT LIST ░░░ -->
+<!-- ░░░ 8. SHOT LIST / SLATE / MAP ░░░ -->
 <section class="page">
-  <div class="corner">Shot List</div>
-  <h2 class="sec"><span class="num">7</span> Shot List on the Phone</h2>
-  <p class="sublede">Build it, import it, mark it — and keep the computer in sync.</p>
+  <div class="corner">Field Tools</div>
+  <h2 class="sec"><span class="num">8</span> Shot List, Slate &amp; Site Map</h2>
+  <p class="sublede">Plan the night, slate the shots, find your way around.</p>
 
-  <h3><span class="dot"></span>Three ways to add shots</h3>
+  <h3><span class="dot"></span>The shot list</h3>
+  <p>Fill it three ways: <strong>Load Sample EDC</strong> (practice), <strong>Import CSV</strong> (the production's real
+  list — drag a <code class="k">.csv</code> onto the window; columns Artist, Stage, Festival, Pilot, Day), or
+  <strong>add by hand</strong>. Each shot is <strong>pending</strong>, <strong>completed</strong>, or
+  <strong>skipped</strong>. Marking Done/Skip on the phone updates the same row on the computer and fires a red blink +
+  ding there, so the editor knows footage is incoming. Skipped shots drop out of the "next card" queue. Off-network
+  changes queue and retry automatically.</p>
+
+  <div class="call tip"><div class="ttl">Live auto-sync — no import step</div><p>The phone keeps the shot list in sync with the computer automatically. Change the list on the PC and connected phones update within a few seconds. Anything already marked completed or skipped stays that way — only new or future shots change.</p></div>
+
+  <h3><span class="dot"></span>The festival slate</h3>
   <ul class="ticks">
-    <li><strong>➕ Add Shot</strong> — enter Artist, Stage, Festival (plus optional Pilot/Day) and keep adding more in a row.</li>
-    <li><strong>📄 Add CSV</strong> — paste rows or upload a <span class="mono">.csv/.txt</span>. Columns: <em>Artist, Stage, Festival, Pilot, Day</em>.</li>
-    <li><strong>⤵ Import PC</strong> — pull the computer's loaded shot list onto the phone (each row links 1:1 to the computer).</li>
+    <li><strong>GoPro Labs sync QR</strong> — scan with a GoPro to sync its clock/timecode (Stable, Med, Fast, Freeze; live TC for 24/25/30/60 fps).</li>
+    <li><strong>Take counter</strong> — bumps save back to the linked shot.</li>
+    <li><strong>Themes</strong>, <strong>landscape lock</strong>, and a clean <strong>fullscreen</strong> slate for the camera.</li>
   </ul>
+  <div class="call note"><div class="ttl">Mic &amp; screen-wake need HTTPS</div><p>Audio take-recording and keeping the
+  screen awake only work over the Tailscale HTTPS address. Plain http:// blocks them.</p></div>
 
-  <h3><span class="dot"></span>Marking shots — and the red light</h3>
-  <p>Each shot has <strong>Mark Done</strong>, <strong>Skip</strong>, <strong>✏️ Edit</strong>, and <strong>🎬 Slate</strong>. For shots
-  imported from the computer, marking Done or Skipped updates the <strong>same row on the computer</strong> and triggers a
-  <strong>red blinking light + ding</strong> there — so the editor knows that artist's footage is completed (or skipped) and incoming.</p>
-
-  <div class="call tip"><div class="ttl">Works off-network too</div><p>If you mark a shot while briefly off Wi-Fi or before
-  Tailscale reconnects, it's <strong>queued and retried</strong> automatically — it reaches the computer the moment you're back.
-  A <em>"⏳ waiting to sync"</em> note shows while anything is pending.</p></div>
-
-  <h3><span class="dot"></span>It remembers you</h3>
-  <p>Your selected <strong>pilot and day</strong> are saved on the phone — back out, open the slate, or close the app, and you
-  return to your pilot/day with no re-selecting. The shot list also opens with the <strong>computer off</strong>.</p>
-
-  <h3><span class="dot"></span>Resetting on the computer (📋 Shot List window)</h3>
-  <p>In the computer's <strong>📋 Shot List</strong> window, a finished day shows <strong>↩ Reopen Day</strong> at the
-  <strong>top and bottom</strong> of that day — it sends <em>every</em> shot for that pilot/day (completed <em>and</em> skipped)
-  back to pending. <strong>⟳ Reset Entire List</strong> (top toolbar) does the same for <strong>every pilot and day</strong> at once.
-  A shot you Skip in the list is also skipped by the card workflow, so it won't reappear as the next card.</p>
-
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>7 · Shot List</span></div>
+  <h3><span class="dot"></span>Site map</h3>
+  <p>In Setup ▸ Mobile Dashboard, add a venue map image (PNG/JPG/WEBP/GIF/BMP/SVG). It shows full-screen on the phone,
+  works offline once cached, and updates on every phone instantly when you replace it.</p>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 8 — Field Tools</span></div>
 </section>
 
-<!-- ░░░ 8. SLATE ░░░ -->
-<section class="page">
-  <div class="corner">Slate</div>
-  <h2 class="sec"><span class="num">8</span> The Festival Slate</h2>
-  <p class="sublede">A high-contrast digital slate with GoPro time-sync.</p>
-
-  <p>Open it from any shot (🎬 <strong>Slate</strong>, pre-filled with that artist/stage/pilot) or from <strong>Simple Slate</strong>
-  on the home screen. Use the <strong>‹ Back</strong> button to return to where you came from.</p>
-
-  <h3><span class="dot"></span>Features</h3>
-  <ul class="ticks">
-    <li><strong>GoPro Labs sync QR</strong> — scan it with a GoPro to sync its clock/timecode. Modes: <em>Stable, Med, Fast,</em> and <em>Freeze</em> (a frozen snapshot to stop screen flicker). Live TC for 24/25/30/60&nbsp;fps.</li>
-    <li><strong>Take counter</strong> — bump takes on the linked shot; the count saves back and the slate remembers it next time.</li>
-    <li><strong>Themes</strong> — Vibrant, Aurora, Sunrise, Lime, Laser neon profiles.</li>
-    <li><strong>Landscape lock &amp; fullscreen</strong> — a rotate-to-landscape guard and a clean fullscreen slate for the camera.</li>
-  </ul>
-
-  <div class="call note"><div class="ttl">Mic &amp; screen-wake need the HTTPS address</div><p>Audio take-recording and keeping
-  the screen awake only work when you open the app via the <strong>★ Tailscale HTTPS</strong> address (Section 6). Over a plain
-  <span class="mono">http://</span> address browsers block them. Everything else — QR sync, the slate, takes, and shot sync — works on any address.</p></div>
-
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>8 · Slate</span></div>
-</section>
-
-<!-- ░░░ 9. TROUBLESHOOTING ░░░ -->
+<!-- ░░░ 9. SIMPLE MODE + TROUBLESHOOTING ░░░ -->
 <section class="page">
   <div class="corner">Help</div>
-  <h2 class="sec"><span class="num">9</span> Tips &amp; Troubleshooting</h2>
-  <p class="sublede">Quick answers to common situations.</p>
+  <h2 class="sec"><span class="num">9</span> Simple Mode &amp; Troubleshooting</h2>
+  <p class="sublede">The lighter flow, and quick fixes.</p>
 
+  <h3><span class="dot"></span>Simple Mode</h3>
+  <p>Switch to Simple mode for one-off or non-assignment work. Instead of picking an artist from a shot list, you type
+  a folder name; the app makes RAW/STABILIZED under <code class="k">Local\[Show]\[Folder]</code>, runs the same SD-copy
+  and robot, and copies to Media/Bella by toggle. No shot-list queue, no Dump Raws, no Complete-and-advance — the fast
+  path for simple jobs.</p>
+
+  <h3><span class="dot"></span>Troubleshooting</h3>
   <table>
-    <tr><th>Situation</th><th>What to do</th></tr>
-    <tr><td>Phone says "Offline" / can't reach the computer</td><td>Make sure the app is open on the PC and you're on the same Wi-Fi (or Tailscale is on and you used the 100.x address). The Shot List &amp; Slate still work offline.</td></tr>
-    <tr><td>Marking a shot doesn't update the computer</td><td>That shot must be linked — tap <strong>⤵ Import PC</strong> once; it links your existing shots 1:1 to the computer. Then Done/Skip will sync and light up.</td></tr>
-    <tr><td>The phone shows an old screen after an update</td><td>Reload the page; the build stamp at the very bottom should match the latest. On an installed (home-screen) app, close and reopen it.</td></tr>
-    <tr><td>Robot clicks the wrong spots</td><td>Re-run <strong>Calibrate GoPro Robot</strong> — calibration is tied to this computer's resolution/scaling.</td></tr>
-    <tr><td>Mic recording in the slate won't start</td><td>Expected over a plain address — it needs HTTPS. Use the rest of the slate normally.</td></tr>
-    <tr><td>Moving the app to a new computer</td><td>Just copy the .exe. Then redo Setup: paths, calibration, and password are per-computer.</td></tr>
+    <tr><th>Symptom</th><th>Fix</th></tr>
+    <tr><td>Robot clicks the wrong spots</td><td>Re-run Calibrate GoPro Robot (tied to this computer's resolution/scaling and the GoPro window position).</td></tr>
+    <tr><td>Mac robot does nothing / errors</td><td>Grant Accessibility + Screen Recording in System Settings ▸ Privacy &amp; Security, then re-run.</td></tr>
+    <tr><td>File count doesn't match</td><td>A clip may have been missed — re-run rather than delivering an incomplete card.</td></tr>
+    <tr><td>Phone says "Offline"</td><td>App must be open on the computer; same Wi-Fi or Tailscale on. Shot List &amp; Slate still work offline.</td></tr>
+    <tr><td>Phone marks don't reach the PC</td><td>Make sure the phone is connected (Tailscale on / same Wi-Fi). The list auto-syncs every few seconds; marks queue and retry until they land — no import step.</td></tr>
+    <tr><td>Phone shows an old screen</td><td>Reload the page; on a home-screen app, close and reopen.</td></tr>
+    <tr><td>New computer</td><td>Copy the app, redo Setup — paths, calibration &amp; password are per-computer.</td></tr>
   </table>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Section 9 — Help</span></div>
+</section>
 
-  <div class="call note"><div class="ttl">Find the build</div><p>The mobile page shows its build at the very bottom (e.g.
-  <span class="mono">build pwa-2026-06-02-x-offline-first</span>). Handy when confirming an update reached the phone.</p></div>
+<!-- ░░░ QUICK REFERENCE ░░░ -->
+<section class="page">
+  <div class="corner">Cheat Sheet</div>
+  <h2 class="sec"><span class="num">★</span> Quick Reference</h2>
+  <p class="sublede">The whole job on one page, for when you've done it before.</p>
 
-  <div style="margin-top:34px;text-align:center;color:var(--muted);font-size:12px;">
-    <div style="display:inline-block;width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,var(--cyan),var(--purple));line-height:46px;font-size:24px;">🎬</div>
-    <div style="margin-top:10px;font-weight:900;letter-spacing:.18em;color:#fff;">FPV CARD BOSS 1.2.0</div>
-    <div>Fly safe. Stabilize everything. Deliver from anywhere.</div>
+  <div class="call note"><div class="ttl">The loop</div><p>Pick assignment → <strong>Create Folders</strong> →
+  <strong>Copy SD → RAW</strong> → set Horizon/Dual → <strong>🤖 Auto-Run GoPro</strong> (hands off) → <strong>Move
+  Files</strong> → <strong>Copy Media</strong> + <strong>Copy Bella</strong> → <strong>Dump Raws</strong> →
+  <strong>Complete Card</strong> → update Media Master → wipe card.</p></div>
+
+  <div class="cards">
+    <div class="mcard"><h4>Export settings</h4><p>HEVC 10-bit · HyperSmooth Pro ON · Smoothness 15 · Cropping 15 · Aspect 8:7. Un-gain unlinks the sliders first.</p></div>
+    <div class="mcard"><h4>Calibration (14)</h4><p>batch · 10-bit · HyperSmooth · un-gain · Horizon Lock · Smooth start/end · Crop start/end · aspect open · 8:7 · drop zone · Start · Remove.</p></div>
+    <div class="mcard"><h4>Folder map</h4><p>Local: Event\Pilot\Day\Artist\RAW+STABILIZED · Media: [CardID]\ · Bella: [Artist]\ (STAB only) · Dual: STABILIZED\HORIZON LOCK\</p></div>
+    <div class="mcard"><h4>Modes</h4><p>Horizon Lock = one level export · Dual = regular + Horizon (2× time) · Auto = move→Media→Bella→complete (raws manual).</p></div>
+    <div class="mcard"><h4>Phone connect</h4><p>★ Tailscale HTTPS = offline + mic (Add to Home Screen) · Tailscale HTTP / LAN = online only · open once online to cache.</p></div>
+    <div class="mcard"><h4>Media Master sheet</h4><p>Tab FILM CREW · B = Card ID · C = Size GB · I = Artist · J = COMPLETED. Update only after Media has the full folder.</p></div>
   </div>
 
-  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>9 · Help</span></div>
+  <div class="call warn"><div class="ttl">Mac one-time</div><p>Grant Accessibility + Screen Recording. Calibration is separate from Windows.</p></div>
+  <div class="call danger"><div class="ttl">Never deliver short</div><p>If the file count doesn't match, re-run. Re-calibrate whenever the GoPro window moves.</p></div>
+  <div class="pgfoot"><span>FPV Card Boss · User Manual</span><span>Quick Reference</span></div>
+</section>
+
+<!-- ░░░ BACK COVER ░░░ -->
+<section class="page cover">
+  <div class="logo">🎬</div>
+  <h1 style="font-size:46px;">Fly safe.<br/>Stabilize<br/>everything.</h1>
+  <div class="tag">Deliver from anywhere. — FPV Card Boss</div>
+  <div class="rule"></div>
+  <div class="meta">FPV Card Boss · User Manual, Setup Guide &amp; Operator SOP · v1.2.0 · Windows &amp; macOS</div>
 </section>
 
 </body>

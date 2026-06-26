@@ -15,6 +15,10 @@ npm-debug.log*
 Thumbs.db
 .DS_Store
 
+# Stray local scratch files
+.__wtest.txt
+dist-package/
+
 # Editor / local
 *.local
 .claude/settings.local.json
