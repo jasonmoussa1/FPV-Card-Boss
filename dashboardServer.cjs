@@ -16,6 +16,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 // ── LAN / Tailscale URL detection ────────────────────────────────────────────
@@ -46,26 +47,38 @@ function detectUrls(port) {
 // returned by /state so we can confirm the phone is loading the FRESH page (not a
 // stale service-worker cache). If the phone footer shows an older stamp, its PWA
 // cache is stale → remove/re-add the app or clear site data.
-const PAGE_BUILD = 'pwa-2026-06-25-livesync';
+const PAGE_BUILD = 'pwa-2026-06-26-moveauth';
 // When this server process started — proves the phone is talking to a fresh run.
 const SERVER_STARTED = new Date().toISOString();
 
 // ── Static PWA assets (served inline; icons read from /assets) ────────────────
 const ICON_DIR = path.join(__dirname, 'assets');
-let _iconCache = {};
+// Cache by file, but re-read when the file's mtime changes so a rebuilt asset is
+// served WITHOUT restarting the app. One stat() per request is negligible.
+let _iconCache = {}; // file -> { mtimeMs, buf }
 function readIcon(file) {
-  if (_iconCache[file]) return _iconCache[file];
-  try { _iconCache[file] = fs.readFileSync(path.join(ICON_DIR, file)); } catch { _iconCache[file] = Buffer.alloc(0); }
-  return _iconCache[file];
+  const p = path.join(ICON_DIR, file);
+  let mtimeMs = -1;
+  try { mtimeMs = fs.statSync(p).mtimeMs; } catch {}
+  const hit = _iconCache[file];
+  if (hit && hit.mtimeMs === mtimeMs) return hit.buf;
+  let buf;
+  try { buf = fs.readFileSync(p); } catch { buf = Buffer.alloc(0); }
+  _iconCache[file] = { mtimeMs, buf };
+  return buf;
 }
 
 // The slate is built as one self-contained HTML file at dist-slate/index.html.
+// Re-read when the built file changes (mtime) so `npm run build:server` is picked
+// up live; no app restart needed to serve the fresh slate.
 const SLATE_PATH = path.join(__dirname, 'dist-slate', 'index.html');
-let _slateHtml = null;
+let _slateHtml = null, _slateMtime = -1;
 function readSlate() {
-  if (_slateHtml != null) return _slateHtml;
-  try { _slateHtml = fs.readFileSync(SLATE_PATH, 'utf8'); }
-  catch { _slateHtml = '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;background:#050505;color:#fff;padding:24px">Slate not built yet.</body>'; }
+  let mtimeMs = -1;
+  try { mtimeMs = fs.statSync(SLATE_PATH).mtimeMs; } catch {}
+  if (_slateHtml != null && mtimeMs === _slateMtime) return _slateHtml;
+  try { _slateHtml = fs.readFileSync(SLATE_PATH, 'utf8'); _slateMtime = mtimeMs; }
+  catch { _slateHtml = '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;background:#050505;color:#fff;padding:24px">Slate not built yet.</body>'; _slateMtime = -1; }
   return _slateHtml;
 }
 
@@ -389,9 +402,17 @@ const PAGE = `<!DOCTYPE html>
   function scheduleRetry(){ if(retry) return; retry=setTimeout(function(){ retry=null; connect(); },4000); }
 
   // ── Commands: POST over HTTP so buttons work even without a usable WebSocket. ──
+  // The unlock token (when a Move password is set) rides along on every command so
+  // the computer can verify it server-side. Harmless when no password is set.
+  function authToken(){ try{ return sessionStorage.getItem('fpvcb_token')||''; }catch(e){ return ''; } }
+  function relock(){ try{ sessionStorage.removeItem('fpvcb_unlocked'); sessionStorage.removeItem('fpvcb_token'); }catch(e){} }
   function send(obj){
-    fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)})
-      .then(function(){ setTimeout(poll,150); })
+    var body=Object.assign({}, obj, { token: authToken() });
+    fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){
+        if(r && r.status===401){ relock(); alert('The Move Files session expired (the computer restarted). Please unlock again.'); showHome(); return; }
+        setTimeout(poll,150);
+      })
       .catch(function(){});
   }
   // ── DELIVERY MODE (phone Move Files section) ──
@@ -523,7 +544,9 @@ const PAGE = `<!DOCTYPE html>
       var pw=prompt('Enter the Move Files password (set on the computer):');
       if(pw===null) return;
       fetch('/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:pw})}).then(function(r){return r.json();}).then(function(u){
-        if(u.ok){ sessionStorage.setItem('fpvcb_unlocked','1'); revealMove(); } else alert('Wrong password.');
+        if(u.ok){ sessionStorage.setItem('fpvcb_unlocked','1'); if(u.token){ try{ sessionStorage.setItem('fpvcb_token', u.token); }catch(e){} } revealMove(); }
+        else if(u.error){ alert(u.error); }
+        else alert('Wrong password.');
       }).catch(function(){ alert('Could not reach the computer to check the password.'); });
     }).catch(function(){ alert('The computer isn’t reachable. The Move Files section needs the computer running and on the same network.'); });
   }
@@ -880,6 +903,19 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
   let currentPort = null;
   const clients = new Set();
 
+  // ── Move Files auth (enforced HERE, server-side) ─────────────────────────────
+  // The phone password used to be client-only: the page hid the Move panel, but
+  // /cmd ran move / deliveries / deleteSd for ANY device on the LAN. Now /unlock
+  // issues a random bearer token and destructive commands require a valid token
+  // whenever a Move password is set. With NO password set, behaviour is unchanged
+  // (open on the trusted LAN/tailnet, exactly as before).
+  const validTokens = new Set();
+  const moveLocked = () => (isMoveLocked ? !!isMoveLocked() : false);
+  const tokenOk = (t) => typeof t === 'string' && t.length > 0 && validTokens.has(t);
+  const commandAuthed = (t) => !moveLocked() || tokenOk(t);
+  // Light per-process brute-force throttle on /unlock.
+  let unlockFails = 0, unlockBlockedUntil = 0;
+
   // Never let the browser/PWA cache the live page, status, or service worker.
   const noStore = (res) => res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   app.get('/', (_req, res) => { noStore(res); res.type('html').send(PAGE); });
@@ -891,11 +927,23 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
   app.get('/health', (_req, res) => res.json({ ok: true }));
   // Move Files section gate: does it need a password? + validate an attempt.
   app.get('/lock', (_req, res) => { noStore(res); res.json({ locked: isMoveLocked ? !!isMoveLocked() : false }); });
-  app.post('/unlock', express.json(), (req, res) => {
+  app.post('/unlock', express.json({ limit: '4kb' }), (req, res) => {
     noStore(res);
+    const now = Date.now();
+    if (now < unlockBlockedUntil) { res.status(429).json({ ok: false, error: 'Too many attempts — wait a few seconds and try again.' }); return; }
     const pw = req.body && typeof req.body.pw === 'string' ? req.body.pw : '';
     const ok = checkMovePassword ? !!checkMovePassword(pw) : true;
-    res.json({ ok });
+    if (!ok) {
+      unlockFails++;
+      if (unlockFails >= 5) { unlockBlockedUntil = now + 10000; unlockFails = 0; }
+      res.json({ ok: false });
+      return;
+    }
+    unlockFails = 0;
+    // Mint a token the phone returns on every command. Valid for this server run.
+    const token = crypto.randomBytes(18).toString('hex');
+    validTokens.add(token);
+    res.json({ ok: true, token });
   });
   // Phone → computer alert (e.g. a shot was marked complete on mobile). The desktop
   // dings + shows a toast so the operator knows footage is coming.
@@ -947,8 +995,15 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
   }
 
   // Phone → desktop commands over plain HTTP (reliable fallback for the WebSocket).
-  app.post('/cmd', express.json(), (req, res) => {
-    try { handleCommand(req.body || {}); } catch {}
+  // When a Move password is set, a valid unlock token is required (in the body or
+  // the x-fpvcb-token header), so a device that skips the UI can't fire move /
+  // deliveries / deleteSd. With no password set, all commands are allowed as before.
+  app.post('/cmd', express.json({ limit: '8kb' }), (req, res) => {
+    noStore(res);
+    const body = req.body || {};
+    const token = (typeof body.token === 'string' && body.token) || req.get('x-fpvcb-token') || '';
+    if (!commandAuthed(token)) { res.status(401).json({ ok: false, error: 'locked' }); return; }
+    try { handleCommand(body); } catch {}
     res.json({ ok: true });
   });
 
@@ -970,6 +1025,8 @@ function createDashboard({ onMove, onSetMode, onCommand, getSnapshot, getShotlis
       ws.on('message', (data) => {
         let msg;
         try { msg = JSON.parse(data.toString()); } catch { return; }
+        // Commands over the WebSocket must carry a valid token too when locked.
+        if (!commandAuthed(msg && msg.token)) return;
         handleCommand(msg);
       });
       ws.on('close', () => clients.delete(ws));
