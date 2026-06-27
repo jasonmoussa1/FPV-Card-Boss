@@ -47,7 +47,7 @@ function detectUrls(port) {
 // returned by /state so we can confirm the phone is loading the FRESH page (not a
 // stale service-worker cache). If the phone footer shows an older stamp, its PWA
 // cache is stale → remove/re-add the app or clear site data.
-const PAGE_BUILD = 'pwa-2026-06-26-moveauth';
+const PAGE_BUILD = 'pwa-2026-06-26-shotsyncfix';
 // When this server process started — proves the phone is talking to a fresh run.
 const SERVER_STARTED = new Date().toISOString();
 
@@ -684,7 +684,14 @@ const PAGE = `<!DOCTYPE html>
         if((ex.status||'pending')==='pending' && (ps==='completed'||ps==='skipped') && !inflight){ ex.status=ps; changed=true; }
         var pt=it.takes||''; if(pt && !ex.takes){ ex.takes=pt; changed=true; }
       } else {
-        shotItems.push({ id:uid(), pcId:id, artist:artist, stage:stage, festival:'', pilot:pilot, day:day, time:it.flyTime||'', notes:it.notes||'', status:it.status||'pending', takes:it.takes||'', src:'pc' });
+        // Brand-new PC shot: add it AND mark its id as "seen this sync", so the
+        // cleanup pass below (which drops pc-tagged shots the computer no longer
+        // lists) doesn't immediately delete the very shot we just added. Without
+        // this, a never-before-seen PC shot was added then removed in the same
+        // pass, leaving the phone's list empty while the computer served shots.
+        var nid=uid();
+        shotItems.push({ id:nid, pcId:id, artist:artist, stage:stage, festival:'', pilot:pilot, day:day, time:it.flyTime||'', notes:it.notes||'', status:it.status||'pending', takes:it.takes||'', src:'pc' });
+        seen[nid]=true;
         changed=true;
       }
     });
