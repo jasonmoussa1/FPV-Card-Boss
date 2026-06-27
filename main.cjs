@@ -810,8 +810,16 @@ Write-Host "REMOVE_COMPLETE"
 // macOS robot path: drives GoPro Player via nut.js (mac-robot.cjs). Mirrors the
 // Windows handler's activeJob/status setup so the file-move flow behaves the same.
 async function runMacRobot(event, coords, rawPath, stabilizedPath, goProOutputPath, meta) {
-  const os = require('os');
-  const outputDir = goProOutputPath || path.join(os.homedir(), 'Movies');
+  // On macOS, GoPro Player writes each stabilized export back into the SOURCE
+  // folder — the folder the clips were dragged in from, i.e. the card's RAW
+  // folder (rawPath) — NOT a global Movies folder the way Windows uses Videos.
+  // So the move step pulls the finished files FROM the source folder, exactly
+  // like the PC pulls from its Videos folder. We only honour an explicit macOS
+  // (POSIX) path the operator set as GoPro Player's Output Directory; the
+  // renderer's Windows-style default ("C:\\Users\\Jason\\Videos") is ignored on Mac.
+  const outputDir = (typeof goProOutputPath === 'string' && goProOutputPath.startsWith('/'))
+    ? goProOutputPath
+    : rawPath;
   const robotStartTime = Date.now();
 
   let expectedCount = 0;
@@ -1337,7 +1345,11 @@ Write-Host "REMOVE_COMPLETE"
 
 ipcMain.handle('move-stabilized-files', async (_event, { videosFolder, stabilizedFolder, robotStartTime }) => {
   try {
-    const r = performMove({ videosFolder, stabilizedFolder, robotStartTime });
+    // On macOS the renderer passes the Windows-style default folder, but GoPro
+    // writes exports into the source (RAW) folder. Use the active job's source
+    // folder so the desktop "Move" button pulls from the right place on Mac too.
+    const srcFolder = (isMacPlatform() && activeJob && activeJob.videosFolder) ? activeJob.videosFolder : videosFolder;
+    const r = performMove({ videosFolder: srcFolder, stabilizedFolder, robotStartTime });
     // Reflect the desktop move on the phone dashboard too.
     setStatus({
       state: 'complete',
