@@ -35,6 +35,12 @@ export interface PilotConfig {
   name: string;
   cardPrefix: string;
   startingCardNumber: number;
+  // Optional per-pilot drive overrides. When set, this pilot's files route to
+  // these roots instead of the global mediaRootPath / bellaRootPath. Blank/undefined
+  // = use the global default. Lets two pilots deliver to their own drives, switching
+  // automatically with the active pilot.
+  mediaRootPath?: string;
+  bellaRootPath?: string;
 }
 
 export interface SimpleShowConfig {

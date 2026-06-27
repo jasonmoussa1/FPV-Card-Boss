@@ -667,18 +667,21 @@ export default function Dashboard() {
     setDumpRawsError(null);
   }, [selectedPilot]);
 
+  // Per-pilot routing: use the active pilot's own drive override when they've set
+  // one, otherwise fall back to the global root. Because these depend on activePilot,
+  // switching the working pilot instantly reroutes Media + Bella to that pilot's drive.
   const destinationMediaDrivePath = useMemo(() => {
-    const root = config.mediaRootPath.trim();
+    const root = (activePilot?.mediaRootPath?.trim() || config.mediaRootPath.trim());
     return `${root}\\${sanitizedCard}`;
-  }, [config.mediaRootPath, sanitizedCard]);
+  }, [activePilot, config.mediaRootPath, sanitizedCard]);
 
   const destinationBellaSocialPath = useMemo(() => {
-    const root = config.bellaRootPath.trim();
+    const root = (activePilot?.bellaRootPath?.trim() || config.bellaRootPath.trim());
     if (activeAssignmentName === "NO ASSIGNMENTS IN QUEUE") {
       return `${root}\\${sanitizedPilot}`;
     }
     return `${root}\\${sanitizedArtist}`;
-  }, [config.bellaRootPath, sanitizedArtist, sanitizedPilot, activeAssignmentName]);
+  }, [activePilot, config.bellaRootPath, sanitizedArtist, sanitizedPilot, activeAssignmentName]);
 
   const mediaMasterLine = useMemo(() => {
     return `${currentCardId}\t${sizeInput.trim()}\t${activeAssignmentName}\t${notesInput.trim()}`;
@@ -2537,6 +2540,52 @@ export default function Dashboard() {
                       </div>
                       <div className="text-xs font-mono text-slate-500">
                         Current Card ID: <span className="text-cyan-400 font-black text-sm">{currentCardId}</span>
+                      </div>
+
+                      {/* PER-PILOT DRIVE ROUTING — overrides the global Media/Bella roots
+                          for THIS pilot only. Blank = use the global default. Switches with
+                          the working pilot, so each pilot's files land on their own drive. */}
+                      <div className="border-t border-slate-800/70 pt-2 mt-1 space-y-2">
+                        <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                          {(activePilot?.name ?? selectedPilot)} — Drive Routing{' '}
+                          <span className="text-slate-600 normal-case font-bold tracking-normal">· blank = use global default</span>
+                        </span>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Media Drive (this pilot)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={activePilot?.mediaRootPath ?? ''}
+                              onChange={e => setConfig(prev => ({ ...prev, pilots: (prev.pilots || []).map(p => p.name === selectedPilot ? { ...p, mediaRootPath: e.target.value } : p) }))}
+                              placeholder={`Default: ${config.mediaRootPath || 'M:'}`}
+                              className="bg-slate-900 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono border-none flex-grow min-w-0"
+                            />
+                            <button
+                              onClick={async () => { const p = await selectFolder(); if (p) setConfig(prev => ({ ...prev, pilots: (prev.pilots || []).map(pp => pp.name === selectedPilot ? { ...pp, mediaRootPath: p } : pp) })); }}
+                              className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs font-black whitespace-nowrap"
+                            >📁</button>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bella Drive (this pilot)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={activePilot?.bellaRootPath ?? ''}
+                              onChange={e => setConfig(prev => ({ ...prev, pilots: (prev.pilots || []).map(p => p.name === selectedPilot ? { ...p, bellaRootPath: e.target.value } : p) }))}
+                              placeholder={`Default: ${config.bellaRootPath || 'S:'}`}
+                              className="bg-slate-900 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono border-none flex-grow min-w-0"
+                            />
+                            <button
+                              onClick={async () => { const p = await selectFolder(); if (p) setConfig(prev => ({ ...prev, pilots: (prev.pilots || []).map(pp => pp.name === selectedPilot ? { ...pp, bellaRootPath: p } : pp) })); }}
+                              className="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs font-black whitespace-nowrap"
+                            >📁</button>
+                          </div>
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-600 leading-relaxed">
+                          → Media goes to: <span className="text-slate-400">{destinationMediaDrivePath}</span><br />
+                          → Bella goes to: <span className="text-slate-400">{destinationBellaSocialPath}</span>
+                        </div>
                       </div>
                     </>
                   )}
