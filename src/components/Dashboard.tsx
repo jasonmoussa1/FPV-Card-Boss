@@ -657,6 +657,23 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, []);
 
+  // ── Cross-pilot background jobs ──────────────────────────────────────────────
+  // The file copies already run in the background once started, but the inline
+  // status follows whichever pilot is selected — so after switching to the next
+  // pilot you lose sight of the previous pilot's in-flight copies. This tracks each
+  // long copy (tagged with the pilot + card it belongs to) so it stays visible in a
+  // small panel no matter who's selected. Purely additive — the copy logic is untouched.
+  const [bgJobs, setBgJobs] = useState<{ id: string; pilot: string; card: string; label: string; status: 'running' | 'done' | 'error' }[]>([]);
+  const startBgJob = (label: string): string => {
+    const id = `bg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setBgJobs(prev => [{ id, pilot: selectedPilot || '—', card: currentCardId, label, status: 'running' as const }, ...prev].slice(0, 20));
+    return id;
+  };
+  const endBgJob = (id: string, status: 'done' | 'error' = 'done') => {
+    setBgJobs(prev => prev.map(j => (j.id === id ? { ...j, status } : j)));
+    window.setTimeout(() => setBgJobs(prev => prev.filter(j => j.id !== id)), status === 'error' ? 15000 : 6000);
+  };
+
   const localRawPath = useMemo(() => {
     const root = config.localRootPath.trim();
     if (activeAssignmentName === "NO ASSIGNMENTS IN QUEUE") {
@@ -942,6 +959,8 @@ export default function Dashboard() {
   const handleMoveExports = async (): Promise<boolean> => {
     if (!robotStartTime) return false;
     setMoveExportsStatus('moving');
+    const jid = startBgJob('Move exports → STABILIZED');
+    let jobOk = false;
     try {
       const result = await window.electron?.moveStabilizedFiles({
         videosFolder: config.goProOutputPath || 'C:\\Users\\Jason\\Videos',
@@ -954,6 +973,7 @@ export default function Dashboard() {
           setSizeInput(result.totalGB.toFixed(2) + ' GB');
         }
         setMoveExportsStatus('success');
+        jobOk = true;
         return true;
       } else {
         setMoveExportsError(result?.error ?? 'Unknown error');
@@ -964,6 +984,8 @@ export default function Dashboard() {
       setMoveExportsError(String(err));
       setMoveExportsStatus('error');
       return false;
+    } finally {
+      endBgJob(jid, jobOk ? 'done' : 'error');
     }
   };
 
@@ -971,6 +993,8 @@ export default function Dashboard() {
     setMediaDriveCopyStatus('copying');
     setMediaDriveCopyProgress(0);
     setMediaDriveCopyError(null);
+    const jid = startBgJob('Copy → Media drive');
+    let jobOk = false;
     try {
       const result = await window.electron?.copyToMediaDrive({
         localStabilizedPath,
@@ -980,6 +1004,7 @@ export default function Dashboard() {
       if (result?.success) {
         setMediaDriveCopyResult({ fileCount: result.fileCount ?? 0, sizeGB: result.sizeGB ?? '0.00 GB' });
         setMediaDriveCopyStatus('success');
+        jobOk = true;
         return true;
       } else {
         setMediaDriveCopyError(result?.message ?? 'Unknown error copying to Media Drive');
@@ -992,6 +1017,7 @@ export default function Dashboard() {
       return false;
     } finally {
       setMediaDriveCopyProgress(null);
+      endBgJob(jid, jobOk ? 'done' : 'error');
     }
   };
 
@@ -1004,6 +1030,8 @@ export default function Dashboard() {
     setBellaDriveCopyStatus('copying');
     setBellaDriveCopyProgress(0);
     setBellaDriveCopyError(null);
+    const jid = startBgJob('Copy → Bella drive');
+    let jobOk = false;
     try {
       const result = await window.electron?.copyToBellaDrive({
         localStabilizedPath,
@@ -1013,6 +1041,7 @@ export default function Dashboard() {
       if (result?.success) {
         setBellaDriveCopyResult({ artistName: sanitizedArtist, fileCount: result.fileCount ?? 0, sizeGB: result.sizeGB ?? '0.00 GB' });
         setBellaDriveCopyStatus('success');
+        jobOk = true;
         return true;
       } else {
         setBellaDriveCopyError(result?.message ?? 'Unknown error copying to Bella Drive');
@@ -1025,6 +1054,7 @@ export default function Dashboard() {
       return false;
     } finally {
       setBellaDriveCopyProgress(null);
+      endBgJob(jid, jobOk ? 'done' : 'error');
     }
   };
 
@@ -4250,6 +4280,37 @@ export default function Dashboard() {
         pilots={pilots}
         onShotStatusChange={handleShotStatusChange}
       />
+
+      {/* BACKGROUND JOBS — cross-pilot view of in-flight copies. A copy you kicked
+          off for one pilot stays visible here after you switch to the next pilot,
+          so you can pipeline work without losing track of what's still moving. */}
+      {bgJobs.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-[9500] w-72 max-w-[88vw] space-y-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">⏳ Background Jobs</div>
+          {bgJobs.map(j => (
+            <div
+              key={j.id}
+              className={`rounded-xl px-3 py-2 border text-xs font-bold flex items-start gap-2 shadow-xl backdrop-blur-md ${
+                j.status === 'running'
+                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-100'
+                  : j.status === 'error'
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-100'
+                  : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-100'
+              }`}
+            >
+              <span className="shrink-0 mt-0.5">{j.status === 'running' ? '⏳' : j.status === 'error' ? '⚠️' : '✓'}</span>
+              <span className="min-w-0 leading-tight">
+                <span className="font-black">{j.pilot}</span>
+                <span className="opacity-70"> · {j.card}</span>
+                <br />
+                <span className="opacity-90">
+                  {j.label}{j.status === 'running' ? '…' : j.status === 'error' ? ' — failed' : ' — done'}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <UserManual isOpen={isManualOpen} onClose={() => setIsManualOpen(false)} />
 
