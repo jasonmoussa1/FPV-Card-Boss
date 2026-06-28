@@ -564,17 +564,22 @@ export default function Dashboard() {
   }, [daySections]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeQueue = useMemo(() => {
+    // Tolerant match: pilots are typed by hand in the pool, so compare against the
+    // CSV's pilot text case-insensitively and ignoring stray/extra spaces. Without
+    // this, "Michael Jennings" vs "MICHAEL JENNINGS" (or a double space) left the
+    // queue empty even though the shot list still listed the shots.
+    const np = (s?: string) => String(s ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
     return allAssignments.filter(a => {
-      if (a.daySection !== selectedDaySection) return false;
-      if (a.pilot !== selectedPilot) return false;
+      if (np(a.daySection) !== np(selectedDaySection)) return false;
+      if (np(a.pilot) !== np(selectedPilot)) return false;
 
       // Exclude anything already handled for this day/pilot — whether it was
       // COMPLETED or SKIPPED. (Previously only the skip-key list was checked, so a
       // skipped shot could reappear after completing the next card.)
       const isAlreadyHandled = history.some(
         h => h.assignment.toUpperCase().trim() === a.assignment.toUpperCase().trim() &&
-             h.daySection === selectedDaySection &&
-             h.pilot === selectedPilot &&
+             np(h.daySection) === np(selectedDaySection) &&
+             np(h.pilot) === np(selectedPilot) &&
              (h.status === 'Complete' || h.status === 'Skip')
       );
       if (isAlreadyHandled) return false;
@@ -590,14 +595,15 @@ export default function Dashboard() {
   // completion or skip status. Drives the "Choose from list" picker so an
   // artist can always be re-selected even after their card was completed.
   const pickerAssignments = useMemo(() => {
+    const np = (s?: string) => String(s ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
     return allAssignments
-      .filter(a => a.daySection === selectedDaySection && a.pilot === selectedPilot)
+      .filter(a => np(a.daySection) === np(selectedDaySection) && np(a.pilot) === np(selectedPilot))
       .map(a => ({
         ...a,
         isCompleted: history.some(
           h => h.assignment.toUpperCase() === a.assignment.toUpperCase() &&
-               h.daySection === selectedDaySection &&
-               h.pilot === selectedPilot &&
+               np(h.daySection) === np(selectedDaySection) &&
+               np(h.pilot) === np(selectedPilot) &&
                h.status === 'Complete'
         ),
       }));
@@ -634,25 +640,42 @@ export default function Dashboard() {
   const sanitizedCard = useMemo(() => currentCardId, [currentCardId]);
   const sanitizedArtist = useMemo(() => cleanFolderName(activeAssignmentName), [activeAssignmentName]);
 
+  // Folder-path separator. Windows uses "\\", macOS uses "/". We used to hardcode
+  // "\\" everywhere, which on a Mac produced broken mixed paths like
+  // "/Users/STAB/Desktop/folder\\DTLB26\\..." — a backslash is a LITERAL filename
+  // character on macOS, so the whole tree collapsed into one mangled folder and
+  // SD/Media copies silently failed. Resolve it from the chosen platform.
+  const [pathSep, setPathSep] = useState<string>('\\');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const info = await window.electron?.getPlatform?.();
+        if (!cancelled && info?.platform) setPathSep(info.platform === 'mac' ? '/' : '\\');
+      } catch { /* keep default backslash */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const localRawPath = useMemo(() => {
     const root = config.localRootPath.trim();
     if (activeAssignmentName === "NO ASSIGNMENTS IN QUEUE") {
       const segs = [root, sanitizedEvent, sanitizedPilot, sanitizedCard].filter(s => s && s.trim().length > 0);
-      return segs.join('\\') + '\\RAW';
+      return segs.join(pathSep) + pathSep + 'RAW';
     }
     const segs = [root, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist].filter(s => s && s.trim().length > 0);
-    return segs.join('\\') + '\\RAW';
-  }, [config.localRootPath, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist, sanitizedCard, activeAssignmentName]);
+    return segs.join(pathSep) + pathSep + 'RAW';
+  }, [config.localRootPath, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist, sanitizedCard, activeAssignmentName, pathSep]);
 
   const localStabilizedPath = useMemo(() => {
     const root = config.localRootPath.trim();
     if (activeAssignmentName === "NO ASSIGNMENTS IN QUEUE") {
       const segs = [root, sanitizedEvent, sanitizedPilot, sanitizedCard].filter(s => s && s.trim().length > 0);
-      return segs.join('\\') + '\\STABILIZED';
+      return segs.join(pathSep) + pathSep + 'STABILIZED';
     }
     const segs = [root, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist].filter(s => s && s.trim().length > 0);
-    return segs.join('\\') + '\\STABILIZED';
-  }, [config.localRootPath, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist, sanitizedCard, activeAssignmentName]);
+    return segs.join(pathSep) + pathSep + 'STABILIZED';
+  }, [config.localRootPath, sanitizedEvent, sanitizedPilot, sanitizedDay, sanitizedArtist, sanitizedCard, activeAssignmentName, pathSep]);
 
   // Reset the "Created" confirmation whenever the target folder changes (switching
   // artist/pilot/day, or after completing a card advances the queue).
@@ -672,16 +695,16 @@ export default function Dashboard() {
   // switching the working pilot instantly reroutes Media + Bella to that pilot's drive.
   const destinationMediaDrivePath = useMemo(() => {
     const root = (activePilot?.mediaRootPath?.trim() || config.mediaRootPath.trim());
-    return `${root}\\${sanitizedCard}`;
-  }, [activePilot, config.mediaRootPath, sanitizedCard]);
+    return `${root}${pathSep}${sanitizedCard}`;
+  }, [activePilot, config.mediaRootPath, sanitizedCard, pathSep]);
 
   const destinationBellaSocialPath = useMemo(() => {
     const root = (activePilot?.bellaRootPath?.trim() || config.bellaRootPath.trim());
     if (activeAssignmentName === "NO ASSIGNMENTS IN QUEUE") {
-      return `${root}\\${sanitizedPilot}`;
+      return `${root}${pathSep}${sanitizedPilot}`;
     }
-    return `${root}\\${sanitizedArtist}`;
-  }, [activePilot, config.bellaRootPath, sanitizedArtist, sanitizedPilot, activeAssignmentName]);
+    return `${root}${pathSep}${sanitizedArtist}`;
+  }, [activePilot, config.bellaRootPath, sanitizedArtist, sanitizedPilot, activeAssignmentName, pathSep]);
 
   const mediaMasterLine = useMemo(() => {
     return `${currentCardId}\t${sizeInput.trim()}\t${activeAssignmentName}\t${notesInput.trim()}`;
@@ -1053,7 +1076,7 @@ export default function Dashboard() {
       setDumpRawsStatus('error');
       return false;
     }
-    const pilotRootPath = `${config.localRootPath.trim()}\\${sanitizedEvent}\\${sanitizedPilot}`;
+    const pilotRootPath = `${config.localRootPath.trim()}${pathSep}${sanitizedEvent}${pathSep}${sanitizedPilot}`;
     setDumpRawsStatus('dumping');
     setDumpRawsError(null);
     setDumpRawsResult(null);
@@ -1502,37 +1525,37 @@ export default function Dashboard() {
     const showClean = cleanFolderName(s.showName || 'MY_SHOW');
     const cardId = `${(s.cardPrefix || 'A').toUpperCase()}_${String(s.startingCardNumber || 1).padStart(3, '0')}`;
     return {
-      raw: `${(s.localRootPath || 'D:').trim()}\\${showClean}\\RAW\\${cardId}`,
-      stabilized: `${(s.localRootPath || 'D:').trim()}\\${showClean}\\STABILIZED\\${cardId}`,
-      media: `${(s.mediaRootPath || 'M:').trim()}\\${cardId}`,
+      raw: `${(s.localRootPath || 'D:').trim()}${pathSep}${showClean}${pathSep}RAW${pathSep}${cardId}`,
+      stabilized: `${(s.localRootPath || 'D:').trim()}${pathSep}${showClean}${pathSep}STABILIZED${pathSep}${cardId}`,
+      media: `${(s.mediaRootPath || 'M:').trim()}${pathSep}${cardId}`,
     };
-  }, [config.simpleConfig]);
+  }, [config.simpleConfig, pathSep]);
 
   const sanitizedSimpleFolder = useMemo(() => cleanFolderName(simpleFolderName), [simpleFolderName]);
 
   const simpleLocalRawPath = useMemo(() => {
     const root = config.localRootPath.trim();
     const folderClean = sanitizedSimpleFolder || 'FOLDER_NAME';
-    return `${root}\\${sanitizedEvent}\\${folderClean}\\RAW`;
-  }, [config.localRootPath, sanitizedEvent, sanitizedSimpleFolder]);
+    return `${root}${pathSep}${sanitizedEvent}${pathSep}${folderClean}${pathSep}RAW`;
+  }, [config.localRootPath, sanitizedEvent, sanitizedSimpleFolder, pathSep]);
 
   const simpleLocalStabPath = useMemo(() => {
     const root = config.localRootPath.trim();
     const folderClean = sanitizedSimpleFolder || 'FOLDER_NAME';
-    return `${root}\\${sanitizedEvent}\\${folderClean}\\STABILIZED`;
-  }, [config.localRootPath, sanitizedEvent, sanitizedSimpleFolder]);
+    return `${root}${pathSep}${sanitizedEvent}${pathSep}${folderClean}${pathSep}STABILIZED`;
+  }, [config.localRootPath, sanitizedEvent, sanitizedSimpleFolder, pathSep]);
 
   const simpleMediaPath = useMemo(() => {
     const root = config.mediaRootPath.trim();
     const folderClean = sanitizedSimpleFolder || 'FOLDER_NAME';
-    return `${root}\\${folderClean}`;
-  }, [config.mediaRootPath, sanitizedSimpleFolder]);
+    return `${root}${pathSep}${folderClean}`;
+  }, [config.mediaRootPath, sanitizedSimpleFolder, pathSep]);
 
   const simpleBellaPath = useMemo(() => {
     const root = config.bellaRootPath.trim();
     const folderClean = sanitizedSimpleFolder || 'FOLDER_NAME';
-    return `${root}\\${folderClean}`;
-  }, [config.bellaRootPath, sanitizedSimpleFolder]);
+    return `${root}${pathSep}${folderClean}`;
+  }, [config.bellaRootPath, sanitizedSimpleFolder, pathSep]);
 
   // Simple mode: reset the green "Folders Created" confirmation when the target
   // folder changes (i.e. the folder name is edited) so it isn't stale.
