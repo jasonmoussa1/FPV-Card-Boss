@@ -673,6 +673,16 @@ export default function Dashboard() {
     setBgJobs(prev => prev.map(j => (j.id === id ? { ...j, status } : j)));
     window.setTimeout(() => setBgJobs(prev => prev.filter(j => j.id !== id)), status === 'error' ? 15000 : 6000);
   };
+  // Which pilots currently have a copy running — drives the at-a-glance "doing both" cues.
+  const runningByPilot = useMemo(() => {
+    const m = new Map<string, number>();
+    bgJobs.forEach(j => { if (j.status === 'running') m.set(j.pilot, (m.get(j.pilot) || 0) + 1); });
+    return m;
+  }, [bgJobs]);
+  const pilotsCopying = useMemo(() => Array.from(runningByPilot.keys()), [runningByPilot]);
+  // "Dual" = a pilot is copying in the background while you're working a DIFFERENT
+  // pilot — i.e. you're genuinely running two at once.
+  const dualActive = !!selectedPilot && pilotsCopying.some(p => p !== selectedPilot);
 
   const localRawPath = useMemo(() => {
     const root = config.localRootPath.trim();
@@ -2514,6 +2524,11 @@ export default function Dashboard() {
                             }`}
                           >
                             <span>{pilot.name}  ·  {pilot.cardPrefix.toUpperCase()}_{paddedNum}</span>
+                            {runningByPilot.get(pilot.name) ? (
+                              <span className="text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-400/50 px-1.5 py-0.5 rounded-full animate-pulse whitespace-nowrap">
+                                ⏳ copying
+                              </span>
+                            ) : null}
                             {completedCount > 0 && (
                               <span className="text-[9px] font-black bg-emerald-900/40 text-emerald-400 border border-emerald-700/30 px-1.5 py-0.5 rounded-full">
                                 {completedCount}✓
@@ -4280,6 +4295,15 @@ export default function Dashboard() {
         pilots={pilots}
         onShotStatusChange={handleShotStatusChange}
       />
+
+      {/* DUAL-MODE BANNER — unmistakable "you're running two pilots at once" cue.
+          Shows when a pilot is copying in the background while you work a different
+          one. pointer-events-none so it can never block the controls underneath. */}
+      {dualActive && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9600] pointer-events-none px-4 py-2 rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 text-slate-950 text-[11px] font-black uppercase tracking-widest shadow-2xl flex items-center gap-2">
+          ⚡ Dual mode — {pilotsCopying.join(' + ')} copying · {selectedPilot} active
+        </div>
+      )}
 
       {/* BACKGROUND JOBS — cross-pilot view of in-flight copies. A copy you kicked
           off for one pilot stays visible here after you switch to the next pilot,
