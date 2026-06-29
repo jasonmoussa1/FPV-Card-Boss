@@ -89,10 +89,19 @@ async function copyToBella(localStabilizedPath, bellaSocialPath, onPct) {
   return { success: true, message: 'Bella social copy complete.' };
 }
 
-// copy-to-media-drive: whole card folder (RAW+STABILIZED) → media drive card folder
+// copy-to-media-drive: RAW + STABILIZED → media drive card folder.
+// STABILIZED is copied FIRST so the deliverable (stabilized) clips reach the media
+// drive fastest during a live show, then RAW. (Was a single whole-folder copy, which
+// sent RAW first alphabetically.)
 async function copyToMediaDrive(localStabilizedPath, mediaDrivePath, cardId, onPct) {
   const localCardPath = path.dirname(localStabilizedPath);
-  await rsyncCopy(localCardPath, mediaDrivePath, onPct);
+  const localRawPath = path.join(localCardPath, 'RAW');
+  if (fs.existsSync(localStabilizedPath)) {
+    await rsyncCopy(localStabilizedPath, path.join(mediaDrivePath, 'STABILIZED'), (p) => { if (onPct) onPct(p * 0.5); });
+  }
+  if (fs.existsSync(localRawPath)) {
+    await rsyncCopy(localRawPath, path.join(mediaDrivePath, 'RAW'), (p) => { if (onPct) onPct(50 + p * 0.5); });
+  }
   return {
     success: true,
     cardId,

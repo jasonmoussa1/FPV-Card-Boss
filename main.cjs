@@ -1545,13 +1545,16 @@ ipcMain.handle('copy-to-media-drive', async (event, { localStabilizedPath, media
   try {
     if (isMacPlatform()) return await macFs.copyToMediaDrive(localStabilizedPath, mediaDrivePath, cardId, (p) => { try { event.sender.send('media-drive-copy-progress', p); } catch {} });
     const localCardPath = path.dirname(localStabilizedPath);
+    const localRawPath = path.join(localCardPath, 'RAW');
     const progressRe = /(\d+\.?\d*)\s*%/;
 
-    await new Promise((resolve, reject) => {
-      const proc = spawn('robocopy', [localCardPath, mediaDrivePath, '/E', '/Z', '/W:5', '/R:3'], { windowsHide: true });
+    // STABILIZED first so the deliverable (stabilized) clips reach the media drive
+    // fastest during a live show, then RAW. (Was one whole-folder copy = RAW first.)
+    const runMediaRobocopy = (src, dst, phaseOffset, phaseScale) => new Promise((resolve, reject) => {
+      const proc = spawn('robocopy', [src, dst, '/E', '/Z', '/W:5', '/R:3'], { windowsHide: true });
       proc.stdout.on('data', (chunk) => {
         const match = chunk.toString().match(progressRe);
-        if (match) event.sender.send('media-drive-copy-progress', parseFloat(match[1]));
+        if (match) event.sender.send('media-drive-copy-progress', phaseOffset + parseFloat(match[1]) * phaseScale);
       });
       proc.on('close', (code) => {
         if (code !== null && code >= 8) {
@@ -1561,6 +1564,8 @@ ipcMain.handle('copy-to-media-drive', async (event, { localStabilizedPath, media
       });
       proc.on('error', reject);
     });
+    if (fs.existsSync(localStabilizedPath)) await runMediaRobocopy(localStabilizedPath, path.join(mediaDrivePath, 'STABILIZED'), 0, 0.5);
+    if (fs.existsSync(localRawPath)) await runMediaRobocopy(localRawPath, path.join(mediaDrivePath, 'RAW'), 50, 0.5);
 
     const fileCount = countFilesRecursive(mediaDrivePath);
     const sizeGB = calculateFolderSizeGB(mediaDrivePath);
