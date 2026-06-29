@@ -1160,10 +1160,11 @@ export default function Dashboard() {
   };
 
   // ── AUTO MODE ──────────────────────────────────────────────────────────────
-  // When an export completes and AUTO is on, deliver everything and finish the
-  // card with no clicks: move → Media → Bella → (Raw dump if enabled) → Complete
-  // Card & advance. Stops and alerts if any step fails (card stays open so you can
-  // fix it and finish manually). Festival mode only.
+  // When an export completes and AUTO is on, auto-DELIVER everything: move →
+  // Media → Bella. It deliberately does NOT auto-complete the card — completing a
+  // card resets the shared card state, which disrupted running a second pilot in
+  // parallel, so you press "Complete Card" yourself when ready. Stops and alerts if
+  // any step fails (card stays open so you can fix it and finish manually). Festival mode only.
   const autoChainRunningRef = useRef(false);
   const runAutoChain = async () => {
     if (autoChainRunningRef.current) return;
@@ -1202,11 +1203,14 @@ export default function Dashboard() {
       // NOTE: Raw dump is intentionally NOT part of Auto mode — dumping raws is
       // always a deliberate, manual click (desktop or phone "Dump Raws" button).
 
-      setAutoChainStep('Completing card & advancing…');
-      handleCompleteCardConfirmed();
+      // Card is intentionally LEFT OPEN. Auto-complete was removed because completing
+      // a card resets the shared card state (assignment, card #, copy statuses), which
+      // disrupted running a second pilot in parallel. AUTO now just delivers; you press
+      // "Complete Card" yourself when ready — so completion never fires mid-way through
+      // the other pilot's work.
       setAutoChainStatus('done');
-      setAutoChainStep('Auto-complete finished — ready for the next card.');
-      try { window.electron?.dashboardReportState({ lastActivity: 'AUTO: card delivered & completed.' }); } catch {}
+      setAutoChainStep('Delivered (STABILIZED + drives). Press “Complete Card” when ready.');
+      try { window.electron?.dashboardReportState({ lastActivity: 'AUTO: card delivered — complete manually.' }); } catch {}
     } catch (e: unknown) {
       fail(String(e));
     } finally {
@@ -3225,7 +3229,7 @@ export default function Dashboard() {
                   {moveMode === 'auto' ? (
                     <div className="space-y-2">
                       <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                        When an export finishes, files auto-move to STABILIZED{mediaToggleOn ? ', Media' : ''}{bellaToggleOn ? ', Bella' : ''}, then the card auto-completes and advances — no clicks. Stops &amp; alerts if any step fails (card stays open). <span className="text-slate-400">Dumping raws is always a separate, manual click.</span>
+                        When an export finishes, files auto-move to STABILIZED{mediaToggleOn ? ', Media' : ''}{bellaToggleOn ? ', Bella' : ''} — no clicks. The card stays open: press <span className="text-white">Complete Card</span> yourself when ready (so completing one pilot never disrupts another running in parallel). Stops &amp; alerts if any step fails. <span className="text-slate-400">Dumping raws is always a separate, manual click.</span>
                       </p>
                     </div>
                   ) : (
